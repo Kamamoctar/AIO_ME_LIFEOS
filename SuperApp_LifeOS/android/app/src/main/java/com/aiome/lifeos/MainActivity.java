@@ -1,4 +1,4 @@
-package com.silentmonarch.app;
+package com.aiome.lifeos;
 
 import com.getcapacitor.BridgeActivity;
 
