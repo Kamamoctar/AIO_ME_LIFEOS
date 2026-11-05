@@ -29,6 +29,16 @@ export function formatCompactFCFA(amount) {
   return `${sign}${abs}`;
 }
 
+export function formatDateFR(dateStr) {
+  if (!dateStr) return '—';
+  try {
+    const d = new Date(dateStr);
+    return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' });
+  } catch {
+    return dateStr;
+  }
+}
+
 /** Calcule les soldes de chaque compte en fonction des transactions */
 export function computeAccountBalances(accounts = [], transactions = []) {
   const map = new Map();
@@ -37,10 +47,10 @@ export function computeAccountBalances(accounts = [], transactions = []) {
       accountId: a.id,
       name: a.name,
       type: a.type,
-      initial: a.initialBalance || 0,
+      initial: Number(a.initialBalance) || 0,
       inflows: 0,
       outflows: 0,
-      balance: a.initialBalance || 0
+      balance: Number(a.initialBalance) || 0
     });
   }
 
@@ -116,13 +126,13 @@ export function computeEmergencyFundStatus(finances) {
     }
   }
 
-  const monthlyEssential = Math.max(50000, essentialCharges || essentialCategories || 75000);
+  const monthlyEssential = Math.max(0, essentialCharges || essentialCategories || 0);
   const target = monthlyEssential * (settings.emergencyFundMonths || 3);
   
   const cashStatus = computeCashStatus(finances.accounts, finances.transactions, settings.safetyMargin);
   const available = cashStatus.savingsCash || cashStatus.availableCash;
   const missing = Math.max(0, target - available);
-  const percent = Math.min(100, Math.round((available / target) * 100));
+  const percent = target > 0 ? Math.min(100, Math.round((available / target) * 100)) : 100;
 
   return { monthlyEssential, target, available, missing, percent, months: settings.emergencyFundMonths || 3 };
 }
@@ -168,6 +178,112 @@ export function computeNetWorth(finances) {
   };
 }
 
+/** Synthèse mensuelle réelle (Revenus, Dépenses réelles, Investissements, Épargne nette) */
+export function computeMonthlyRealSummary(transactions = [], currentYearMonth) {
+  const targetKey = currentYearMonth || new Date().toISOString().slice(0, 7); // 'YYYY-MM'
+  let income = 0;
+  let expenses = 0;
+  let fees = 0;
+  let invested = 0;
+  let donations = 0;
+
+  for (const t of transactions) {
+    if (!t.date || !t.date.startsWith(targetKey)) continue;
+    const amount = Number(t.amount) || 0;
+    const fee = Number(t.fee) || 0;
+
+    if (t.type === 'INCOME' || t.type === 'DIVIDEND') {
+      income += amount;
+    } else if (t.type === 'EXPENSE') {
+      expenses += amount + fee;
+      fees += fee;
+    } else if (t.type === 'DONATION') {
+      donations += amount;
+      expenses += amount + fee;
+      fees += fee;
+    } else if (t.type === 'INVESTMENT') {
+      invested += amount;
+      if (fee > 0) { expenses += fee; fees += fee; }
+    } else if (t.type === 'TRANSFER') {
+      if (fee > 0) { expenses += fee; fees += fee; }
+    }
+  }
+
+  const netSavings = income - expenses - invested;
+  return { income, expenses, fees, invested, donations, netSavings, key: targetKey };
+}
+
+/** Taux de couverture hors-salaire (indépendance financière) */
+export function computeNonSalaryCoverage(finances) {
+  const sources = finances.incomeSources || [];
+  const nonSalaryMonthly = sources
+    .filter(s => s.active && s.kind !== 'SALARY')
+    .reduce((sum, s) => sum + (Number(s.monthlyAmount) || 0), 0);
+
+  const ef = computeEmergencyFundStatus(finances);
+  const essential = ef.monthlyEssential || 1;
+  const coverageRatio = Math.min(100, Math.round((nonSalaryMonthly / essential) * 100));
+
+  return { nonSalaryMonthly, essential, coverageRatio };
+}
+
+/** Génération automatique d'alertes financières pour le Cockpit */
+export function generateFinancialAlerts(finances) {
+  const alerts = [];
+  const cashStatus = computeCashStatus(finances.accounts, finances.transactions, finances.settings?.safetyMargin || 0);
+  const ef = computeEmergencyFundStatus(finances);
+  const safetyMargin = Number(finances.settings?.safetyMargin) || 0;
+
+  // Alerte 1 : Trésorerie libre
+  if (cashStatus.availableCash <= 0 && cashStatus.totalCash > 0) {
+    alerts.push({
+      id: 'alt_margin',
+      type: 'WARNING',
+      title: 'Marge de sécurité entamée',
+      message: `Votre trésorerie totale (${formatFCFA(cashStatus.totalCash)}) est inférieure ou égale à votre marge non mobilisable (${formatFCFA(safetyMargin)}).`,
+      level: 'alert'
+    });
+  } else if (cashStatus.totalCash <= 0) {
+    alerts.push({
+      id: 'alt_nocash',
+      type: 'DANGER',
+      title: 'Trésorerie vide',
+      message: 'Aucune liquidité disponible sur les comptes du foyer. Veuillez renflouer ou enregistrer vos soldes réels.',
+      level: 'alert'
+    });
+  }
+
+  // Alerte 2 : Fonds d'urgence incomplet
+  if (ef.target > 0 && ef.percent < 50) {
+    alerts.push({
+      id: 'alt_ef_low',
+      type: 'WARNING',
+      title: `Fonds d'urgence critique (${ef.percent}%)`,
+      message: `Votre réserve de sécurité est inférieure à la moitié de l'objectif (${formatFCFA(ef.missing)} manquants pour ${ef.months} mois de sérénité).`,
+      level: 'warning'
+    });
+  }
+
+  // Alerte 3 : Charges à échéance sous 10 jours
+  const today = new Date();
+  for (const ch of (finances.charges || [])) {
+    if (!ch.active || !ch.nextDueDate) continue;
+    const dueDate = new Date(ch.nextDueDate);
+    const diffDays = Math.ceil((dueDate.getTime() - today.getTime()) / (1000 * 3600 * 24));
+    if (diffDays >= 0 && diffDays <= 10) {
+      alerts.push({
+        id: 'alt_charge_' + ch.id,
+        type: 'INFO',
+        title: `Échéance proche : ${ch.label}`,
+        message: `${formatFCFA(ch.amount)} prévu(s) dans ${diffDays === 0 ? "aujourd'hui" : diffDays + ' jours'} (${ch.nextDueDate}).`,
+        level: 'info'
+      });
+    }
+  }
+
+  return alerts;
+}
+
 /** Analyseur « Puis-je me le permettre ? » */
 export function analyzePurchaseDecision(finances, amount, type = 'ACHAT') {
   const val = Number(amount) || 0;
@@ -177,8 +293,7 @@ export function analyzePurchaseDecision(finances, amount, type = 'ACHAT') {
   const cashStatus = computeCashStatus(finances.accounts, finances.transactions, finances.settings?.safetyMargin || 0);
   const freeCash = cashStatus.availableCash;
 
-  // Calcul du reste à vivre moyen
-  const monthlySalary = Number(finances.monthlySalary) || 203000;
+  const monthlySalary = Number(finances.monthlySalary) || 0;
   const totalSpentEnvelopes = (finances.envelopes || []).reduce((sum, e) => sum + (e.spent || 0), 0);
   const currentResteAVivre = monthlySalary - totalSpentEnvelopes;
 
@@ -192,15 +307,15 @@ export function analyzePurchaseDecision(finances, amount, type = 'ACHAT') {
     badgeColor = 'var(--alert-red)';
     explanation = `Trésorerie disponible insuffisante (${formatFCFA(freeCash)} disponible vs ${formatFCFA(val)} requis). Cette dépense mettrait le foyer à découvert ou empiéterait sur la marge de sécurité inviolable.`;
     consequences.push(`Déficit immédiat de trésorerie de ${formatFCFA(val - freeCash)}.`);
-  } else if (val > (freeCash - ef.target) && ef.available < ef.target) {
+  } else if (val > (freeCash - ef.target) && ef.available < ef.target && ef.target > 0) {
     verdict = 'RISQUE';
     badgeColor = 'var(--alert-red)';
     explanation = `Bien que le solde total suffise, le fonds d'urgence n'est pas encore complet (${ef.percent}%). Ce décaissement réduirait encore votre sécurité en cas de coup dur.`;
     consequences.push(`Retarde la complétion du fonds d'urgence (${formatFCFA(ef.missing)} manquants).`);
-  } else if (val > currentResteAVivre && type === 'ACHAT') {
+  } else if (monthlySalary > 0 && val > currentResteAVivre && type === 'ACHAT') {
     verdict = 'FAISABLE_SOUS_CONDITIONS';
     badgeColor = 'var(--gold)';
-    explanation = `Faisable en étalant sur plusieurs mois ou en prélevant sur l'enveloppe Projets/Plaisir, car le montant dépasse le reste à vivre libre de ce mois (${formatFCFA(currentResteAVivre)}).`;
+    explanation = `Faisable en étalant sur plusieurs mois ou en prélevant sur une enveloppe Projets/Plaisir, car le montant dépasse le reste à vivre libre de ce mois (${formatFCFA(currentResteAVivre)}).`;
     consequences.push(`Reste à vivre mensuel temporairement réduit.`);
   } else {
     verdict = 'FAISABLE';
@@ -250,4 +365,3 @@ export function simulateCompoundInterest({ initial = 0, monthly = 50000, years =
     yearlyBreakdown
   };
 }
-

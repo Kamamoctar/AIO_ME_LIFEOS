@@ -1,10 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   CheckCircle2, Circle, Star, Battery, Sun, Sunset, Moon, 
-  ChevronDown, ChevronUp, Sparkles, BookOpen, Heart, Brain, PenTool 
+  ChevronDown, ChevronUp, Sparkles, BookOpen, Heart, Brain, 
+  Clock, Play, Pause, RotateCcw, Plus, AlertOctagon, Flame, ArrowRight
 } from 'lucide-react';
 import { sound } from '../core/sound.js';
 import { GRILLE_DATA } from '../data/grilleData.js';
+import confetti from 'canvas-confetti';
 
 export default function DailyView({
   dailyQuests,
@@ -14,35 +16,83 @@ export default function DailyView({
   onUpdateDailyEntry,
   focusTrio,
   onValidateHabit,
+  userSettings,
+  onAddCapturedTask,
   onAddXp
 }) {
-  const [expandedQuestId, setExpandedQuestId] = useState(null);
-  const [showJournal, setShowJournal] = useState(false);
-  const [showBlocks, setShowBlocks] = useState(false);
+  const [showRituels, setShowRituels] = useState(false);
+  const [showBlocks, setShowBlocks] = useState(true);
+  const [quickCaptureText, setQuickCaptureText] = useState('');
+
+  // 2-Minute Anti-Procrastination Timer
+  const [timerSeconds, setTimerSeconds] = useState(120);
+  const [timerRunning, setTimerRunning] = useState(false);
+
+  useEffect(() => {
+    let interval = null;
+    if (timerRunning && timerSeconds > 0) {
+      interval = setInterval(() => setTimerSeconds(prev => prev - 1), 1000);
+    } else if (timerSeconds === 0 && timerRunning) {
+      setTimerRunning(false);
+      sound.playLevelUp();
+      confetti({ particleCount: 40, spread: 50 });
+      alert('Bravo ! Les 2 minutes sont écoulées. Votre cerveau est maintenant engagé dans l’action !');
+    }
+    return () => clearInterval(interval);
+  }, [timerRunning, timerSeconds]);
 
   const today = new Date();
   const dayOfMonth = today.getDate();
   const dayNames = ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'];
   const currentDayName = dayNames[today.getDay()];
 
-  // Destiny Grid lookup
-  const destinyDayInfo = GRILLE_DATA.guideDuMois[dayOfMonth.toString()] || { texte: "Journée normale", impacts: {} };
-  const isFavorableDay = GRILLE_DATA.semaine.favorables.includes(currentDayName);
+  // Calcul du jour de l'Astre (personnalisé si date de naissance fournie)
+  let destinyDayIndex = dayOfMonth;
+  if (userSettings?.birthDate) {
+    try {
+      const bDate = new Date(userSettings.birthDate);
+      const diffTime = Math.abs(today - bDate);
+      const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+      destinyDayIndex = ((diffDays % 45) || 45);
+    } catch {
+      destinyDayIndex = dayOfMonth;
+    }
+  }
 
-  const toggleExpand = (id) => {
-    sound.playClick();
-    setExpandedQuestId(prev => prev === id ? null : id);
-  };
+  const destinyDayInfo = GRILLE_DATA.guideDuMois[destinyDayIndex.toString()] || GRILLE_DATA.guideDuMois[dayOfMonth.toString()] || { texte: "Action réfléchie et persévérance.", impacts: {} };
+  const isFavorableDay = GRILLE_DATA.semaine.favorables.includes(currentDayName);
 
   const handlePriorityToggle = () => {
     const nextDone = !dailyEntry.priorityDone;
     if (nextDone) {
       sound.playQuestComplete();
-      onAddXp(10, 'DSC');
+      onAddXp(15, 'DSC');
     } else {
       sound.playClick();
     }
     onUpdateDailyEntry({ ...dailyEntry, priorityDone: nextDone });
+  };
+
+  const handleBlockChange = (blockKey, field, value) => {
+    onUpdateDailyEntry({
+      ...dailyEntry,
+      [blockKey]: { ...(dailyEntry[blockKey] || {}), [field]: value }
+    });
+  };
+
+  const handleBlockToggle = (blockKey) => {
+    const cur = dailyEntry[blockKey] || { task: '', done: false };
+    const nextDone = !cur.done;
+    if (nextDone) {
+      sound.playQuestComplete();
+      onAddXp(10, 'INT');
+    } else {
+      sound.playClick();
+    }
+    onUpdateDailyEntry({
+      ...dailyEntry,
+      [blockKey]: { ...cur, done: nextDone }
+    });
   };
 
   const handleRitualCheck = (type, id) => {
@@ -51,7 +101,7 @@ export default function DailyView({
     const updated = (dailyEntry[listKey] || []).map(item => {
       if (item.id === id) {
         const nextState = !item.done;
-        if (nextState) onAddXp(2, 'DSC');
+        if (nextState) onAddXp(3, 'DSC');
         return { ...item, done: nextState };
       }
       return item;
@@ -59,25 +109,25 @@ export default function DailyView({
     onUpdateDailyEntry({ ...dailyEntry, [listKey]: updated });
   };
 
-  const handleEnergyChange = (e) => {
-    const val = parseInt(e.target.value, 10);
-    onUpdateDailyEntry({ ...dailyEntry, energy: val });
+  const handleQuickCapture = (e) => {
+    e.preventDefault();
+    if (!quickCaptureText.trim()) return;
+    sound.playQuestComplete();
+    if (onAddCapturedTask) onAddCapturedTask(quickCaptureText.trim());
+    setQuickCaptureText('');
+    alert(`« ${quickCaptureText.trim()} » capturé dans votre système !`);
   };
 
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }} className="animate-float">
+    <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }} className="animate-float">
       
-      {/* 1. Destiny Verdict Banner (Mon Astre) */}
-      <div className="system-window" style={{
-        padding: '12px 14px',
-        borderColor: isFavorableDay ? 'var(--neon-green)' : 'var(--border-cyan)',
-        background: 'rgba(10, 14, 26, 0.85)'
-      }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+      {/* 1. Météo & Alignement du Jour (Mon Astre & Briefing) */}
+      <div className="neuro-card" style={{ borderColor: isFavorableDay ? 'var(--neon-green-dim)' : 'var(--border-cyan-dim)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Sparkles size={16} color="var(--gold)" />
-            <span style={{ fontFamily: 'var(--font-title)', fontSize: 11, fontWeight: 700, color: '#fff' }}>
-              ALIGNEMENT DU JOUR • {today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}
+            <Sparkles size={15} color="var(--gold)" />
+            <span style={{ fontFamily: 'var(--font-hud)', fontSize: 11, fontWeight: 800, color: 'var(--text-white)' }}>
+              ALIGNEMENT • {today.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }).toUpperCase()}
             </span>
           </div>
           <span style={{
@@ -85,124 +135,106 @@ export default function DailyView({
             padding: '2px 8px',
             borderRadius: 12,
             fontFamily: 'var(--font-hud)',
-            fontWeight: 700,
-            background: isFavorableDay ? 'rgba(0,255,136,0.15)' : 'rgba(255,215,0,0.15)',
-            color: isFavorableDay ? 'var(--neon-green)' : 'var(--gold)',
-            border: `1px solid ${isFavorableDay ? 'var(--neon-green-dim)' : 'var(--gold-dim)'}`
+            fontWeight: 800,
+            background: isFavorableDay ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+            color: isFavorableDay ? 'var(--neon-green)' : 'var(--gold)'
           }}>
-            {isFavorableDay ? 'JOUR FORT' : 'JOUR VARIABLE'}
+            {isFavorableDay ? 'JOUR FORT' : 'JOUR DE FOCUS'}
           </span>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-main)', marginTop: 4 }}>
-          <strong>Jour {dayOfMonth} :</strong> {destinyDayInfo.texte}
+        <div style={{ fontSize: 12, color: 'var(--text-main)', lineHeight: 1.4 }}>
+          <strong>Cycle Astre (Jour {destinyDayIndex}) :</strong> {destinyDayInfo.texte}
         </div>
+        {userSettings?.morningBriefing && (
+          <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 4 }}>
+            Briefing matinal calé à {userSettings.morningBriefing} • Bilan du soir à {userSettings.eveningBriefing || '18:00'}
+          </div>
+        )}
       </div>
 
-      {/* 2. Priorité Absolue du Jour (Système MK) */}
-      <div className="system-window corner-cut" style={{
-        padding: '14px',
-        borderColor: dailyEntry.priorityDone ? 'var(--neon-green)' : 'var(--gold)',
-        boxShadow: dailyEntry.priorityDone ? '0 0 15px rgba(0,255,136,0.3)' : '0 0 15px rgba(255,215,0,0.2)'
+      {/* 2. Priorité Unique Absolue (Règle du 1er Domino) */}
+      <div className="neuro-card" style={{
+        borderColor: dailyEntry.priorityDone ? 'var(--neon-green)' : 'var(--border-cyan)',
+        background: dailyEntry.priorityDone ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-card)'
       }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Star size={16} color="var(--gold)" fill="var(--gold)" />
-            <span style={{ fontFamily: 'var(--font-title)', fontSize: 11, fontWeight: 900, color: 'var(--gold)', letterSpacing: 0.5 }}>
-              PRIORITÉ UNIQUE DU JOUR (SYSTÈME MK)
-            </span>
-          </div>
-          <span style={{ fontSize: 10, color: 'var(--gold)', fontFamily: 'var(--font-hud)', fontWeight: 700 }}>
-            +10 XP DSC
-          </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+          <span className="kpi-label" style={{ color: 'var(--border-cyan)' }}>LE PREMIER DOMINO (FOCUS DU JOUR)</span>
+          <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>+15 XP DSC</span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <button
+          <button 
             onClick={handlePriorityToggle}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
           >
             {dailyEntry.priorityDone ? (
               <CheckCircle2 size={24} color="var(--neon-green)" />
             ) : (
-              <Circle size={24} color="var(--gold)" />
+              <Circle size={24} color="var(--text-dim)" />
             )}
           </button>
-          <input
-            type="text"
+          <input 
+            type="text" 
+            placeholder="Quelle est l'action qui rend tout le reste plus facile ?"
             value={dailyEntry.priority || ''}
             onChange={(e) => onUpdateDailyEntry({ ...dailyEntry, priority: e.target.value })}
-            placeholder="Quelle est ton unique priorité absolue aujourd'hui ?"
             style={{
               flex: 1,
               background: 'transparent',
               border: 'none',
-              borderBottom: '1px dashed var(--border-cyan-dim)',
-              color: dailyEntry.priorityDone ? 'var(--text-muted)' : '#fff',
-              fontSize: 14,
-              fontWeight: 600,
-              padding: '4px 0',
-              textDecoration: dailyEntry.priorityDone ? 'line-through' : 'none',
-              outline: 'none'
+              borderBottom: '1px solid var(--border-subtle)',
+              borderRadius: 0,
+              padding: '6px 0',
+              fontSize: 13,
+              fontWeight: 700,
+              color: dailyEntry.priorityDone ? 'var(--text-muted)' : 'var(--text-white)',
+              textDecoration: dailyEntry.priorityDone ? 'line-through' : 'none'
             }}
           />
         </div>
       </div>
 
-      {/* 3. Jauge d'Énergie Quotidienne & 4 Blocs de Temps (MK) */}
-      <div className="system-window" style={{ padding: '12px 14px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontFamily: 'var(--font-title)', color: 'var(--border-cyan)' }}>
-            <Battery size={16} />
-            <span>JAUGE D'ÉNERGIE : {dailyEntry.energy || 7} / 10</span>
+      {/* 3. Les 4 Blocs de Deep Work (Système MK) */}
+      <div className="neuro-card">
+        <div 
+          onClick={() => setShowBlocks(!showBlocks)}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Brain size={15} color="var(--monarch-purple)" />
+            <span className="system-window-title" style={{ color: 'var(--monarch-purple)' }}>LES 4 BLOCS DE DEEP WORK (MK)</span>
           </div>
-          <button
-            onClick={() => setShowBlocks(!showBlocks)}
-            style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', fontSize: 11, display: 'flex', alignItems: 'center', gap: 4 }}
-          >
-            {showBlocks ? 'Masquer 4 Blocs' : 'Voir les 4 Blocs'}
-            {showBlocks ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-          </button>
+          {showBlocks ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
 
-        <input
-          type="range"
-          min="1"
-          max="10"
-          value={dailyEntry.energy || 7}
-          onChange={handleEnergyChange}
-          style={{ width: '100%', accentColor: 'var(--border-cyan)' }}
-        />
-
         {showBlocks && (
-          <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 8, borderTop: '1px solid var(--border-cyan-dim)', paddingTop: 10 }}>
-            {['morning', 'lunchTransit', 'afternoon', 'evening'].map(blockKey => {
-              const labels = {
-                morning: '🌅 Matin (05h30 - 08h00)',
-                lunchTransit: '🚗 Midi / Trajet (12h00 - 14h00)',
-                afternoon: '☀️ Après-midi (14h00 - 18h00)',
-                evening: '🌙 Soir (20h00 - 23h00)'
-              };
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+            {['block1', 'block2', 'block3', 'block4'].map((blkKey, idx) => {
+              const blk = dailyEntry[blkKey] || { task: '', done: false };
               return (
-                <div key={blockKey} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  <span style={{ fontSize: 10, fontFamily: 'var(--font-hud)', color: 'var(--text-muted)' }}>
-                    {labels[blockKey]}
+                <div key={blkKey} style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--bg-inset)', padding: '6px 10px', borderRadius: 8 }}>
+                  <button 
+                    onClick={() => handleBlockToggle(blkKey)}
+                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+                  >
+                    {blk.done ? <CheckCircle2 size={18} color="var(--neon-green)" /> : <Circle size={18} color="var(--text-dim)" />}
+                  </button>
+                  <span style={{ fontSize: 10, fontWeight: 800, fontFamily: 'var(--font-hud)', color: 'var(--text-dim)', width: 44 }}>
+                    BLOC {idx + 1}
                   </span>
-                  <input
-                    type="text"
-                    value={dailyEntry.blocks ? dailyEntry.blocks[blockKey] || '' : ''}
-                    onChange={(e) => {
-                      const nextBlocks = { ...(dailyEntry.blocks || {}), [blockKey]: e.target.value };
-                      onUpdateDailyEntry({ ...dailyEntry, blocks: nextBlocks });
-                    }}
-                    placeholder="Focus du bloc..."
+                  <input 
+                    type="text" 
+                    placeholder={`Tâche clé du bloc ${idx + 1}`}
+                    value={blk.task || ''}
+                    onChange={(e) => handleBlockChange(blkKey, 'task', e.target.value)}
                     style={{
-                      background: 'rgba(0,0,0,0.3)',
-                      border: '1px solid var(--border-cyan-dim)',
-                      borderRadius: 4,
-                      color: '#fff',
+                      flex: 1,
+                      background: 'transparent',
+                      border: 'none',
                       fontSize: 12,
-                      padding: '4px 8px',
-                      outline: 'none'
+                      padding: '2px 0',
+                      color: blk.done ? 'var(--text-dim)' : 'var(--text-main)',
+                      textDecoration: blk.done ? 'line-through' : 'none'
                     }}
                   />
                 </div>
@@ -212,294 +244,135 @@ export default function DailyView({
         )}
       </div>
 
-      {/* 4. Trio de Focus d'Habitudes (Zone d'Évolution) */}
-      <div className="system-window" style={{ padding: '14px' }}>
+      {/* 4. Quêtes Quotidiennes (Solo Leveling) */}
+      <div className="neuro-card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 15 }}>🎯</span>
-            <span className="system-window-title">TRIO DE FOCUS D'HABITUDES (MAX 3)</span>
-          </div>
-          <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>Évolution</span>
+          <span className="system-window-title">QUÊTES DU JOUR</span>
+          <span style={{ fontSize: 10, fontFamily: 'var(--font-hud)', color: 'var(--border-cyan)', fontWeight: 700 }}>
+            {(dailyQuests || []).filter(q => q.completed).length} / {(dailyQuests || []).length} COMPLÉTÉES
+          </span>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {(focusTrio || []).map((habit, idx) => (
-            <div key={habit.code || idx} style={{
-              background: 'rgba(0,0,0,0.4)',
-              border: '1px solid var(--border-cyan-dim)',
-              borderRadius: 8,
-              padding: '10px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6
-            }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{habit.title}</span>
-                <span style={{ fontSize: 9, color: 'var(--border-cyan)', fontFamily: 'var(--font-hud)' }}>
-                  +{habit.xp} XP
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {(dailyQuests || []).map(q => (
+            <div 
+              key={q.id}
+              onClick={() => onToggleQuest(q.id)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '8px 10px',
+                borderRadius: 8,
+                background: q.completed ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-inset)',
+                border: `1px solid ${q.completed ? 'var(--neon-green-dim)' : 'transparent'}`,
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                {q.completed ? <CheckCircle2 size={16} color="var(--neon-green)" /> : <Circle size={16} color="var(--text-dim)" />}
+                <span style={{
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: q.completed ? 'var(--text-dim)' : 'var(--text-main)',
+                  textDecoration: q.completed ? 'line-through' : 'none',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}>
+                  {q.title}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                <button
-                  onClick={() => onValidateHabit(idx, 'DONE')}
-                  style={{
-                    flex: 1,
-                    background: habit.status === 'DONE' ? 'var(--neon-green)' : 'rgba(0,255,136,0.1)',
-                    border: '1px solid var(--neon-green)',
-                    color: habit.status === 'DONE' ? '#000' : 'var(--neon-green)',
-                    borderRadius: 4,
-                    padding: '4px',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  🟢 Complet
-                </button>
-                <button
-                  onClick={() => onValidateHabit(idx, 'STEP')}
-                  style={{
-                    flex: 1,
-                    background: habit.status === 'STEP' ? 'var(--gold)' : 'rgba(255,215,0,0.1)',
-                    border: '1px solid var(--gold)',
-                    color: habit.status === 'STEP' ? '#000' : 'var(--gold)',
-                    borderRadius: 4,
-                    padding: '4px',
-                    fontSize: 10,
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  🟡 Petit Pas
-                </button>
-                <button
-                  onClick={() => onValidateHabit(idx, 'SKIPPED')}
-                  style={{
-                    flex: 1,
-                    background: habit.status === 'SKIPPED' ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(255,255,255,0.15)',
-                    color: habit.status === 'SKIPPED' ? '#fff' : 'var(--text-dim)',
-                    borderRadius: 4,
-                    padding: '4px',
-                    fontSize: 10,
-                    cursor: 'pointer'
-                  }}
-                >
-                  ⚪ Sauté
-                </button>
-              </div>
+              <span style={{ fontSize: 10, fontWeight: 700, fontFamily: 'var(--font-hud)', color: 'var(--border-cyan)', flexShrink: 0 }}>
+                +{q.xp} XP
+              </span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* 5. Quêtes Quotidiennes (Solo Leveling) */}
-      <div className="system-window" style={{ padding: '14px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      {/* 5. Chrono 2 Minutes Anti-Procrastination & Capture Rapide */}
+      <div className="neuro-card" style={{ borderColor: 'var(--monarch-purple-dim)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 16 }}>📋</span>
-            <span className="system-window-title">QUÊTES QUOTIDIENNES DU JOUEUR</span>
+            <Clock size={15} color="var(--monarch-purple)" />
+            <span className="system-window-title" style={{ color: 'var(--monarch-purple)' }}>CHRONO 2 MINUTES (DÉMARRAGE ÉCLAIR)</span>
           </div>
-          <span style={{ fontSize: 11, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>
-            {dailyQuests.filter(q => q.completed).length} / {dailyQuests.length}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 14, fontWeight: 900, fontFamily: 'var(--font-hud)', color: 'var(--monarch-purple)' }}>
+              {Math.floor(timerSeconds / 60)}:{(timerSeconds % 60).toString().padStart(2, '0')}
+            </span>
+            <button 
+              onClick={() => { sound.playClick(); setTimerRunning(!timerRunning); }}
+              className="btn-neuro" 
+              style={{ padding: '4px 8px', minHeight: 28, fontSize: 10 }}
+            >
+              {timerRunning ? <Pause size={12} /> : <Play size={12} />}
+            </button>
+            <button 
+              onClick={() => { sound.playClick(); setTimerRunning(false); setTimerSeconds(120); }}
+              className="btn-neuro" 
+              style={{ padding: '4px 6px', minHeight: 28, fontSize: 10 }}
+            >
+              <RotateCcw size={12} />
+            </button>
+          </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {dailyQuests.map(quest => {
-            const isExpanded = expandedQuestId === quest.id;
-            return (
-              <div
-                key={quest.id}
-                style={{
-                  background: quest.completed ? 'rgba(0, 255, 136, 0.05)' : 'rgba(0,0,0,0.4)',
-                  border: `1px solid ${quest.completed ? 'var(--neon-green-dim)' : 'var(--border-cyan-dim)'}`,
-                  borderRadius: 8,
-                  padding: '10px 12px',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-                    <button
-                      onClick={() => onToggleQuest(quest.id)}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0 }}
-                    >
-                      {quest.completed ? (
-                        <CheckCircle2 size={20} color="var(--neon-green)" />
-                      ) : (
-                        <Circle size={20} color="var(--border-cyan)" />
-                      )}
-                    </button>
-                    <div>
-                      <div style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: quest.completed ? 'var(--text-muted)' : '#fff',
-                        textDecoration: quest.completed ? 'line-through' : 'none'
-                      }}>
-                        {quest.emoji} {quest.title}
-                      </div>
-                      <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>
-                        {quest.timeSlot} • +{quest.xp} XP {quest.stat}
-                      </div>
-                    </div>
-                  </div>
-
-                  {quest.subtasks && quest.subtasks.length > 0 && (
-                    <button
-                      onClick={() => toggleExpand(quest.id)}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}
-                    >
-                      {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                    </button>
-                  )}
-                </div>
-
-                {isExpanded && quest.subtasks && (
-                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid rgba(255,255,255,0.08)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {quest.subtasks.map(st => (
-                      <div
-                        key={st.id}
-                        onClick={() => onToggleSubtask(quest.id, st.id)}
-                        style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: 12, color: st.completed ? 'var(--text-muted)' : 'var(--text-main)' }}
-                      >
-                        {st.completed ? <CheckCircle2 size={14} color="var(--neon-green)" /> : <Circle size={14} color="var(--text-dim)" />}
-                        <span style={{ textDecoration: st.completed ? 'line-through' : 'none' }}>{st.title}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+        {/* Boîte de capture rapide universelle */}
+        <form onSubmit={handleQuickCapture} style={{ display: 'flex', gap: 6 }}>
+          <input 
+            type="text" 
+            placeholder="Idée ou tâche parasite à capturer immédiatement..."
+            value={quickCaptureText}
+            onChange={(e) => setQuickCaptureText(e.target.value)}
+            style={{ flex: 1, padding: '6px 10px', fontSize: 12 }}
+          />
+          <button type="submit" className="btn-neuro btn-neuro-primary" style={{ padding: '6px 12px', minHeight: 32 }}>
+            <Plus size={14} /> Capturer
+          </button>
+        </form>
       </div>
 
-      {/* 6. Rituels Matin & Soir + Journal Introspectif unifié (MK) */}
-      <div className="system-window" style={{ padding: '14px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <PenTool size={16} color="var(--border-cyan)" />
-            <span className="system-window-title">RITUELS & JOURNAL DU SOIR</span>
-          </div>
-          <button
-            onClick={() => setShowJournal(!showJournal)}
-            style={{ background: 'none', border: 'none', color: 'var(--border-cyan)', cursor: 'pointer', fontSize: 11, fontFamily: 'var(--font-hud)', fontWeight: 700 }}
-          >
-            {showJournal ? 'RÉDUIRE' : 'OUVRIR JOURNAL'}
-          </button>
+      {/* 6. Rituels Matin & Soir (Section dépliable) */}
+      <div className="neuro-card">
+        <div 
+          onClick={() => setShowRituels(!showRituels)}
+          style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
+        >
+          <span className="system-window-title">RITUELS QUOTIDIENS (MATIN & SOIR)</span>
+          {showRituels ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
         </div>
 
-        {/* Morning Ritual */}
-        <div style={{ marginBottom: 10 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--gold)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Sun size={14} /> Rituel Matinal
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-            {(dailyEntry.morningRitual || []).map(r => (
-              <div
-                key={r.id}
-                onClick={() => handleRitualCheck('morning', r.id)}
-                style={{
-                  background: r.done ? 'rgba(0,255,136,0.1)' : 'rgba(0,0,0,0.4)',
-                  border: `1px solid ${r.done ? 'var(--neon-green)' : 'rgba(255,255,255,0.1)'}`,
-                  borderRadius: 6,
-                  padding: '6px 8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  color: r.done ? 'var(--neon-green)' : 'var(--text-main)'
-                }}
-              >
-                {r.done ? <CheckCircle2 size={12} color="var(--neon-green)" /> : <Circle size={12} color="var(--text-dim)" />}
-                <span>{r.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Evening Ritual */}
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--monarch-purple)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-            <Moon size={14} /> Rituel du Soir
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
-            {(dailyEntry.eveningRitual || []).map(r => (
-              <div
-                key={r.id}
-                onClick={() => handleRitualCheck('evening', r.id)}
-                style={{
-                  background: r.done ? 'rgba(123,47,255,0.2)' : 'rgba(0,0,0,0.4)',
-                  border: `1px solid ${r.done ? 'var(--monarch-purple)' : 'rgba(255,255,255,0.1)'}`,
-                  borderRadius: 6,
-                  padding: '6px 8px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  cursor: 'pointer',
-                  fontSize: 11,
-                  color: r.done ? '#c77dff' : 'var(--text-main)'
-                }}
-              >
-                {r.done ? <CheckCircle2 size={12} color="#c77dff" /> : <Circle size={12} color="var(--text-dim)" />}
-                <span>{r.text}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Evening Introspection Journal */}
-        {showJournal && (
-          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-cyan-dim)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {showRituels && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--border-cyan)', marginBottom: 3 }}>
-                <Brain size={13} /> Journal Tête (Leçons & clarté intellectuelle)
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--gold)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Sun size={12} /> MATIN (MK {userSettings?.morningMk || '05:45'})
               </div>
-              <textarea
-                value={dailyEntry.journal ? dailyEntry.journal.head || '' : ''}
-                onChange={(e) => {
-                  const nextJournal = { ...(dailyEntry.journal || {}), head: e.target.value };
-                  onUpdateDailyEntry({ ...dailyEntry, journal: nextJournal });
-                }}
-                placeholder="Qu'ai-je appris aujourd'hui ? Quelles erreurs éviter ?"
-                rows={2}
-                style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 12, padding: 8, outline: 'none' }}
-              />
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(dailyEntry.morningRitual || []).map(r => (
+                  <div key={r.id} onClick={() => handleRitualCheck('morning', r.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', padding: '4px 0' }}>
+                    {r.done ? <CheckCircle2 size={14} color="var(--neon-green)" /> : <Circle size={14} color="var(--text-dim)" />}
+                    <span style={{ textDecoration: r.done ? 'line-through' : 'none', color: r.done ? 'var(--text-dim)' : 'var(--text-main)' }}>{r.label}</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--gold)', marginBottom: 3 }}>
-                <Heart size={13} /> Journal Cœur (Gratitudes & liens du foyer)
+              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--monarch-purple)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Moon size={12} /> SOIR (MK {userSettings?.eveningMk || '21:15'})
               </div>
-              <textarea
-                value={dailyEntry.journal ? dailyEntry.journal.heart || '' : ''}
-                onChange={(e) => {
-                  const nextJournal = { ...(dailyEntry.journal || {}), heart: e.target.value };
-                  onUpdateDailyEntry({ ...dailyEntry, journal: nextJournal });
-                }}
-                placeholder="Mes gratitudes envers Allah et les miens..."
-                rows={2}
-                style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--gold-dim)', borderRadius: 6, color: '#fff', fontSize: 12, padding: 8, outline: 'none' }}
-              />
-            </div>
-
-            <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--alert-red)', marginBottom: 3 }}>
-                <Sunset size={13} /> Vider le Mental (Anti-rumination)
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {(dailyEntry.eveningRitual || []).map(r => (
+                  <div key={r.id} onClick={() => handleRitualCheck('evening', r.id)} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, cursor: 'pointer', padding: '4px 0' }}>
+                    {r.done ? <CheckCircle2 size={14} color="var(--neon-green)" /> : <Circle size={14} color="var(--text-dim)" />}
+                    <span style={{ textDecoration: r.done ? 'line-through' : 'none', color: r.done ? 'var(--text-dim)' : 'var(--text-main)' }}>{r.label}</span>
+                  </div>
+                ))}
               </div>
-              <textarea
-                value={dailyEntry.journal ? dailyEntry.journal.mindDump || '' : ''}
-                onChange={(e) => {
-                  const nextJournal = { ...(dailyEntry.journal || {}), mindDump: e.target.value };
-                  onUpdateDailyEntry({ ...dailyEntry, journal: nextJournal });
-                }}
-                placeholder="Dépose ici toutes les tensions et pensées parasites pour dormir en paix."
-                rows={2}
-                style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--alert-red-dim)', borderRadius: 6, color: '#fff', fontSize: 12, padding: 8, outline: 'none' }}
-              />
             </div>
           </div>
         )}
@@ -508,4 +381,3 @@ export default function DailyView({
     </div>
   );
 }
-

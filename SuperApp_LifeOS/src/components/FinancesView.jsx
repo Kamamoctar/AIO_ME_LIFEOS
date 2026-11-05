@@ -5,7 +5,7 @@ import {
   Smartphone, Banknote, PiggyBank, ArrowLeftRight, Trash2, 
   Settings, CheckCircle2, AlertTriangle, HelpCircle, Download, 
   Upload, Tag, Scale, Landmark, Calculator, Sparkles, ChevronRight,
-  Clock, DollarSign, HeartHandshake, Eye
+  Clock, DollarSign, HeartHandshake, Eye, Edit3, X, Check, Target
 } from 'lucide-react';
 import { sound } from '../core/sound.js';
 import { 
@@ -15,6 +15,8 @@ import {
   computeCashStatus, 
   computeEmergencyFundStatus, 
   computeNetWorth, 
+  computeNonSalaryCoverage,
+  generateFinancialAlerts,
   analyzePurchaseDecision, 
   simulateCompoundInterest 
 } from '../core/financeEngine.js';
@@ -25,20 +27,26 @@ export default function FinancesView({
   onAddXp,
   theme
 }) {
-  const [activeSubTab, setActiveSubTab] = useState('budget'); // 'budget', 'accounts', 'patrimoine', 'investments', 'decisions', 'settings'
+  const [activeSubTab, setActiveSubTab] = useState('cockpit'); // 'cockpit', 'budget', 'accounts', 'patrimoine', 'investments', 'goals', 'decisions', 'settings'
+
+  // Income / Salary edit modal
+  const [isSalaryModalOpen, setIsSalaryModalOpen] = useState(false);
+  const [editSalaryInput, setEditSalaryInput] = useState(finances.monthlySalary || '');
+  const [editTargetInput, setEditTargetInput] = useState(finances.targetIncome || '');
 
   // Transactions form state
   const [txLabel, setTxLabel] = useState('');
   const [txAmount, setTxAmount] = useState('');
   const [txFee, setTxFee] = useState('');
-  const [txAccount, setTxAccount] = useState(finances.settings?.defaultAccountId || 'acc_wave');
+  const [txAccount, setTxAccount] = useState(finances.settings?.defaultAccountId || (finances.accounts?.[0]?.id || ''));
   const [txType, setTxType] = useState('EXPENSE');
-  const [txCategory, setTxCategory] = useState('cat_alim');
-  const [txEnvelope, setTxEnvelope] = useState('env_vital');
+  const [txCategory, setTxCategory] = useState(finances.categories?.[0]?.id || 'cat_alim');
+  const [txEnvelope, setTxEnvelope] = useState(finances.envelopes?.[0]?.id || '');
+  const [txFilter, setTxFilter] = useState('ALL');
 
   // Transfer form state
-  const [transferFrom, setTransferFrom] = useState(finances.settings?.defaultAccountId || 'acc_wave');
-  const [transferTo, setTransferTo] = useState('acc_savings');
+  const [transferFrom, setTransferFrom] = useState(finances.accounts?.[0]?.id || '');
+  const [transferTo, setTransferTo] = useState(finances.accounts?.[1]?.id || finances.accounts?.[0]?.id || '');
   const [transferAmount, setTransferAmount] = useState('');
   const [transferFee, setTransferFee] = useState('');
 
@@ -54,6 +62,7 @@ export default function FinancesView({
 
   const [newLiabName, setNewLiabName] = useState('');
   const [newLiabAmount, setNewLiabAmount] = useState('');
+  const [newLiabMonthly, setNewLiabMonthly] = useState('');
 
   // BRVM Form state
   const [newPosCompany, setNewPosCompany] = useState('');
@@ -61,6 +70,22 @@ export default function FinancesView({
   const [newPosQty, setNewPosQty] = useState('');
   const [newPosBuyPrice, setNewPosBuyPrice] = useState('');
   const [newPosCurrentPrice, setNewPosCurrentPrice] = useState('');
+
+  // Financial Goal Form state
+  const [newGoalTitle, setNewGoalTitle] = useState('');
+  const [newGoalTarget, setNewGoalTarget] = useState('');
+  const [newGoalCurrent, setNewGoalCurrent] = useState('');
+  const [newGoalDate, setNewGoalDate] = useState('');
+
+  // New Envelope / Charge form state
+  const [newEnvName, setNewEnvName] = useState('');
+  const [newEnvAllocated, setNewEnvAllocated] = useState('');
+  const [newEnvGroup, setNewEnvGroup] = useState('OBLIGATOIRE');
+
+  const [newChargeLabel, setNewChargeLabel] = useState('');
+  const [newChargeAmount, setNewChargeAmount] = useState('');
+  const [newChargeFreq, setNewChargeFreq] = useState('MONTHLY');
+  const [newChargeDue, setNewChargeDue] = useState('');
 
   // Decision Simulator state
   const [decisionAmount, setDecisionAmount] = useState('');
@@ -89,17 +114,20 @@ export default function FinancesView({
   const [clarifAnswer, setClarifAnswer] = useState(finances.clarification3m?.answer || '');
 
   // Derived financial computations
-  const currentSalary = finances.monthlySalary || 203000;
-  const targetIncome = finances.targetIncome || 733333;
-  const incomePercent = Math.min(100, Math.round((currentSalary / targetIncome) * 100));
+  const currentSalary = Number(finances.monthlySalary) || 0;
+  const targetIncome = Number(finances.targetIncome) || 0;
+  const incomePercent = targetIncome > 0 ? Math.min(100, Math.round((currentSalary / targetIncome) * 100)) : 0;
+  const multiplierFactor = currentSalary > 0 && targetIncome > 0 ? (targetIncome / currentSalary).toFixed(1) : 'x3.6';
 
   const cashStatus = computeCashStatus(finances.accounts, finances.transactions, finances.settings?.safetyMargin || 0);
   const efStatus = computeEmergencyFundStatus(finances);
   const netWorthData = computeNetWorth(finances);
+  const nonSalaryCoverage = computeNonSalaryCoverage(finances);
+  const financialAlerts = generateFinancialAlerts(finances);
 
   const totalSpentEnvelopes = (finances.envelopes || []).reduce((sum, e) => sum + (e.spent || 0), 0);
   const totalAllocatedEnvelopes = (finances.envelopes || []).reduce((sum, e) => sum + (e.allocated || 0), 0);
-  const resteAVivre = currentSalary - totalSpentEnvelopes;
+  const resteAVivre = currentSalary > 0 ? (currentSalary - totalSpentEnvelopes) : cashStatus.availableCash;
 
   // Audit event logger helper
   const logAudit = (action, entity, label) => {
@@ -116,6 +144,25 @@ export default function FinancesView({
 
   // --- ACTIONS ---
 
+  // 0. Update Salary & Target Income
+  const handleSaveSalary = () => {
+    const sal = parseInt(editSalaryInput, 10) || 0;
+    const tgt = parseInt(editTargetInput, 10) || 0;
+    sound.playLevelUp();
+
+    const updatedAudits = logAudit('a mis à jour', 'le salaire et la cible', `${formatFCFA(sal)} -> ${formatFCFA(tgt)}`);
+
+    onUpdateFinances({
+      ...finances,
+      monthlySalary: sal,
+      targetIncome: tgt,
+      auditEvents: updatedAudits
+    });
+
+    onAddXp(5, 'DSC');
+    setIsSalaryModalOpen(false);
+  };
+
   // 1. Add Transaction
   const handleAddTransaction = () => {
     const amountNum = parseInt(txAmount, 10);
@@ -123,6 +170,8 @@ export default function FinancesView({
     if (!txLabel.trim() || isNaN(amountNum) || amountNum <= 0) return;
 
     sound.playClick();
+    const targetAcc = txAccount || finances.accounts?.[0]?.id || 'acc_default';
+
     const newTx = {
       id: 'tx_' + Date.now(),
       date: new Date().toISOString().split('T')[0],
@@ -130,9 +179,9 @@ export default function FinancesView({
       amount: amountNum,
       fee: feeNum,
       type: txType,
-      accountId: txAccount,
+      accountId: targetAcc,
       categoryId: txCategory,
-      envelopeId: txEnvelope,
+      envelopeId: txEnvelope || null,
       isShared: true
     };
 
@@ -160,11 +209,18 @@ export default function FinancesView({
     setTxFee('');
   };
 
+  // Delete Transaction
+  const handleDeleteTransaction = (txId) => {
+    sound.playClick();
+    const updated = (finances.transactions || []).filter(t => t.id !== txId);
+    onUpdateFinances({ ...finances, transactions: updated });
+  };
+
   // 2. Transfer between Accounts (Zero False Expense)
   const handleTransfer = () => {
     const amountNum = parseInt(transferAmount, 10);
     const feeNum = parseInt(transferFee, 10) || 0;
-    if (isNaN(amountNum) || amountNum <= 0 || transferFrom === transferTo) return;
+    if (isNaN(amountNum) || amountNum <= 0 || !transferFrom || !transferTo || transferFrom === transferTo) return;
 
     sound.playLevelUp();
     const fromAcc = (finances.accounts || []).find(a => a.id === transferFrom);
@@ -193,7 +249,6 @@ export default function FinancesView({
     onAddXp(3, 'DSC');
     setTransferAmount('');
     setTransferFee('');
-    alert(`Virement de ${formatFCFA(amountNum)} enregistré sans fausse dépense !`);
   };
 
   // 3. Add Account
@@ -223,6 +278,13 @@ export default function FinancesView({
     setNewAccBalance('');
   };
 
+  // Delete Account
+  const handleDeleteAccount = (accId) => {
+    sound.playClick();
+    const updated = (finances.accounts || []).filter(a => a.id !== accId);
+    onUpdateFinances({ ...finances, accounts: updated });
+  };
+
   // 4. Add Asset
   const handleAddAsset = () => {
     if (!newAssetName.trim() || !newAssetValue) return;
@@ -249,21 +311,28 @@ export default function FinancesView({
     setNewAssetValue('');
   };
 
-  // 5. Add Liability
+  const handleDeleteAsset = (id) => {
+    sound.playClick();
+    const updated = (finances.assets || []).filter(a => a.id !== id);
+    onUpdateFinances({ ...finances, assets: updated });
+  };
+
+  // 5. Add Liability / Debt
   const handleAddLiability = () => {
     if (!newLiabName.trim() || !newLiabAmount) return;
     sound.playClick();
-    const val = parseInt(newLiabAmount, 10) || 0;
+    const amt = parseInt(newLiabAmount, 10) || 0;
+    const mth = parseInt(newLiabMonthly, 10) || 0;
 
     const newLiab = {
       id: 'liab_' + Date.now(),
       name: newLiabName.trim(),
-      amount: val,
-      type: 'OTHER',
-      notes: 'Passif enregistré'
+      amount: amt,
+      monthlyPayment: mth,
+      notes: 'Dette / Passif déclaré'
     };
 
-    const updatedAudits = logAudit('a ajouté', `le passif / dette « ${newLiabName.trim()} »`, `${formatFCFA(val)}`);
+    const updatedAudits = logAudit('a enregistré', `la dette « ${newLiabName.trim()} »`, `${formatFCFA(amt)}`);
 
     onUpdateFinances({
       ...finances,
@@ -273,30 +342,34 @@ export default function FinancesView({
 
     setNewLiabName('');
     setNewLiabAmount('');
+    setNewLiabMonthly('');
+  };
+
+  const handleDeleteLiability = (id) => {
+    sound.playClick();
+    const updated = (finances.liabilities || []).filter(l => l.id !== id);
+    onUpdateFinances({ ...finances, liabilities: updated });
   };
 
   // 6. Add BRVM Position
-  const handleAddPosition = () => {
-    if (!newPosCompany.trim() || !newPosQty || !newPosBuyPrice) return;
+  const handleAddBrvmPosition = () => {
+    if (!newPosTicker.trim() || !newPosQty || !newPosBuyPrice) return;
     sound.playClick();
     const qty = parseInt(newPosQty, 10) || 0;
-    const buyPrice = parseInt(newPosBuyPrice, 10) || 0;
-    const curPrice = parseInt(newPosCurrentPrice, 10) || buyPrice;
+    const buy = parseInt(newPosBuyPrice, 10) || 0;
+    const cur = parseInt(newPosCurrentPrice, 10) || buy;
 
     const newPos = {
       id: 'pos_' + Date.now(),
-      company: newPosCompany.trim().toUpperCase(),
-      ticker: newPosTicker.trim().toUpperCase() || newPosCompany.trim().slice(0, 4).toUpperCase(),
+      ticker: newPosTicker.trim().toUpperCase(),
+      companyName: newPosCompany.trim() || newPosTicker.trim().toUpperCase(),
       quantity: qty,
-      avgBuyPrice: buyPrice,
-      feesPaid: Math.round(qty * buyPrice * 0.01),
-      currentPrice: curPrice,
-      dividends: 0,
-      active: true,
-      notes: 'Position BRVM'
+      avgBuyPrice: buy,
+      currentPrice: cur,
+      active: true
     };
 
-    const updatedAudits = logAudit('a ouvert', `la position BRVM « ${newPos.ticker} » (${qty} titres)`, `PRU: ${formatFCFA(buyPrice)}`);
+    const updatedAudits = logAudit('a acheté', `l'action BRVM ${newPosTicker.trim().toUpperCase()}`, `${qty} titres à ${formatFCFA(buy)}`);
 
     onUpdateFinances({
       ...finances,
@@ -311,34 +384,159 @@ export default function FinancesView({
     setNewPosCurrentPrice('');
   };
 
-  // 7. Run Decision Analysis
-  const handleAnalyzeDecision = () => {
-    const val = parseInt(decisionAmount, 10);
-    if (!val || val <= 0) return;
+  const handleDeletePosition = (id) => {
     sound.playClick();
-    const res = analyzePurchaseDecision(finances, val, decisionType);
-    setDecisionResult(res);
+    const updated = (finances.positions || []).filter(p => p.id !== id);
+    onUpdateFinances({ ...finances, positions: updated });
   };
 
-  // 8. Add Income Source (Settings)
-  const handleAddIncomeSource = () => {
-    if (!newIncomeLabel.trim() || !newIncomeAmount) return;
+  // 7. Add Financial Goal
+  const handleAddGoal = () => {
+    if (!newGoalTitle.trim() || !newGoalTarget) return;
     sound.playClick();
-    const val = parseInt(newIncomeAmount, 10) || 0;
+    const tgt = parseInt(newGoalTarget, 10) || 0;
+    const cur = parseInt(newGoalCurrent, 10) || 0;
 
-    const newInc = {
-      id: 'inc_' + Date.now(),
-      label: newIncomeLabel.trim(),
-      kind: newIncomeKind,
-      monthlyAmount: val,
-      active: true
+    const newGoal = {
+      id: 'goal_' + Date.now(),
+      title: newGoalTitle.trim(),
+      targetAmount: tgt,
+      currentAmount: cur,
+      targetDate: newGoalDate || '',
+      status: 'IN_PROGRESS'
     };
 
-    const updatedAudits = logAudit('a déclaré', `la source de revenu « ${newIncomeLabel.trim()} »`, `${formatFCFA(val)}/mois`);
+    const updatedAudits = logAudit('a fixé', `l'objectif financier « ${newGoalTitle.trim()} »`, `${formatFCFA(tgt)}`);
 
     onUpdateFinances({
       ...finances,
-      incomeSources: [...(finances.incomeSources || []), newInc],
+      goals: [...(finances.goals || []), newGoal],
+      auditEvents: updatedAudits
+    });
+
+    setNewGoalTitle('');
+    setNewGoalTarget('');
+    setNewGoalCurrent('');
+    setNewGoalDate('');
+  };
+
+  const handleDeleteGoal = (id) => {
+    sound.playClick();
+    const updated = (finances.goals || []).filter(g => g.id !== id);
+    onUpdateFinances({ ...finances, goals: updated });
+  };
+
+  // 8. Add Envelope & Charge
+  const handleAddEnvelope = () => {
+    if (!newEnvName.trim()) return;
+    sound.playClick();
+    const alloc = parseInt(newEnvAllocated, 10) || 0;
+
+    const newEnv = {
+      id: 'env_' + Date.now(),
+      name: newEnvName.trim(),
+      allocated: alloc,
+      spent: 0,
+      group: newEnvGroup
+    };
+
+    onUpdateFinances({
+      ...finances,
+      envelopes: [...(finances.envelopes || []), newEnv]
+    });
+
+    setNewEnvName('');
+    setNewEnvAllocated('');
+  };
+
+  const handleDeleteEnvelope = (id) => {
+    sound.playClick();
+    const updated = (finances.envelopes || []).filter(e => e.id !== id);
+    onUpdateFinances({ ...finances, envelopes: updated });
+  };
+
+  const handleAddCharge = () => {
+    if (!newChargeLabel.trim() || !newChargeAmount) return;
+    sound.playClick();
+    const amt = parseInt(newChargeAmount, 10) || 0;
+
+    const newCh = {
+      id: 'ch_' + Date.now(),
+      label: newChargeLabel.trim(),
+      amount: amt,
+      frequency: newChargeFreq,
+      nextDueDate: newChargeDue || new Date().toISOString().split('T')[0],
+      active: true
+    };
+
+    onUpdateFinances({
+      ...finances,
+      charges: [...(finances.charges || []), newCh]
+    });
+
+    setNewChargeLabel('');
+    setNewChargeAmount('');
+    setNewChargeDue('');
+  };
+
+  const handleDeleteCharge = (id) => {
+    sound.playClick();
+    const updated = (finances.charges || []).filter(c => c.id !== id);
+    onUpdateFinances({ ...finances, charges: updated });
+  };
+
+  // 9. Monthly Snapshot (Closure)
+  const handleSnapshotMonth = () => {
+    sound.playLevelUp();
+    const monthKey = new Date().toISOString().slice(0, 7);
+    const snap = {
+      id: 'snap_' + Date.now(),
+      month: monthKey,
+      date: new Date().toISOString(),
+      netWorth: netWorthData.netWorth,
+      totalCash: cashStatus.totalCash,
+      salary: currentSalary,
+      totalSpent: totalSpentEnvelopes
+    };
+
+    const updatedAudits = logAudit('a clôturé', `le mois comptable ${monthKey}`, `Patrimoine: ${formatFCFA(netWorthData.netWorth)}`);
+
+    onUpdateFinances({
+      ...finances,
+      snapshots: [snap, ...(finances.snapshots || [])],
+      auditEvents: updatedAudits
+    });
+
+    onAddXp(20, 'DSC');
+    alert(`Mois ${monthKey} clôturé et archivé avec succès !`);
+  };
+
+  // 10. Purchase Decision Analysis
+  const handleAnalyzeDecision = () => {
+    sound.playClick();
+    const result = analyzePurchaseDecision(finances, decisionAmount, decisionType);
+    setDecisionResult(result);
+  };
+
+  // 11. Add Income Source (Settings)
+  const handleAddIncomeSource = () => {
+    if (!newIncomeLabel.trim() || !newIncomeAmount) return;
+    sound.playClick();
+    const amt = parseInt(newIncomeAmount, 10) || 0;
+
+    const newSrc = {
+      id: 'src_' + Date.now(),
+      label: newIncomeLabel.trim(),
+      kind: newIncomeKind,
+      monthlyAmount: amt,
+      active: true
+    };
+
+    const updatedAudits = logAudit('a ajouté', `la source de revenu « ${newIncomeLabel.trim()} »`, `${formatFCFA(amt)} / mois`);
+
+    onUpdateFinances({
+      ...finances,
+      incomeSources: [...(finances.incomeSources || []), newSrc],
       auditEvents: updatedAudits
     });
 
@@ -346,7 +544,13 @@ export default function FinancesView({
     setNewIncomeAmount('');
   };
 
-  // 9. Add Dependent (Settings)
+  const handleDeleteIncomeSource = (id) => {
+    sound.playClick();
+    const updated = (finances.incomeSources || []).filter(s => s.id !== id);
+    onUpdateFinances({ ...finances, incomeSources: updated });
+  };
+
+  // 12. Add Dependent (Settings)
   const handleAddDependent = () => {
     if (!newDepName.trim()) return;
     sound.playClick();
@@ -370,11 +574,17 @@ export default function FinancesView({
     setNewDepRelation('');
   };
 
-  // 10. Add Category (Settings)
+  const handleDeleteDependent = (id) => {
+    sound.playClick();
+    const updated = (finances.dependents || []).filter(d => d.id !== id);
+    onUpdateFinances({ ...finances, dependents: updated });
+  };
+
+  // 13. Add Category (Settings)
   const handleAddCategory = () => {
     if (!newCatName.trim()) return;
     sound.playClick();
-    const budgetNum = parseInt(newCatBudget, 10) || null;
+    const budgetNum = parseInt(newCatBudget, 10) || 0;
 
     const newCat = {
       id: 'cat_' + Date.now(),
@@ -397,7 +607,13 @@ export default function FinancesView({
     setNewCatEssential(false);
   };
 
-  // 11. Save Settings Updates
+  const handleDeleteCategory = (id) => {
+    sound.playClick();
+    const updated = (finances.categories || []).filter(c => c.id !== id);
+    onUpdateFinances({ ...finances, categories: updated });
+  };
+
+  // 14. Save Settings Updates
   const handleUpdateSettings = (updates) => {
     sound.playClick();
     const nextSettings = { ...(finances.settings || {}), ...updates };
@@ -410,7 +626,7 @@ export default function FinancesView({
     });
   };
 
-  // 12. Save Clarification
+  // 15. Save Clarification
   const handleSaveClarification = () => {
     if (!clarifAnswer.trim()) return;
     sound.playLevelUp();
@@ -430,34 +646,64 @@ export default function FinancesView({
     alert('Clarification des 3 330 000 FCFA enregistrée !');
   };
 
+  // Filtered transactions
+  const filteredTransactions = (finances.transactions || []).filter(tx => {
+    if (txFilter === 'ALL') return true;
+    if (txFilter === 'EXPENSE') return tx.type === 'EXPENSE';
+    if (txFilter === 'INCOME') return tx.type === 'INCOME' || tx.type === 'DIVIDEND';
+    if (txFilter === 'TRANSFER') return tx.type === 'TRANSFER';
+    return true;
+  });
+
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }} className="animate-float">
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '100%', boxSizing: 'border-box' }} className="animate-float">
       
-      {/* 1. Global Multiplier Gauge Header */}
-      <div className="system-window corner-cut" style={{ padding: '14px', borderColor: 'var(--gold)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+      {/* 1. Global Multiplier Gauge & Salary Header */}
+      <div className="neuro-card" style={{ borderColor: 'var(--gold)', position: 'relative', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <TrendingUp size={16} color="var(--gold)" />
-            <span style={{ fontFamily: 'var(--font-title)', fontSize: 11, fontWeight: 800, color: 'var(--gold)' }}>
-              OBJECTIF MULTIPLICATEUR REVENU (x3.6)
+            <span style={{ fontFamily: 'var(--font-title)', fontSize: 11, fontWeight: 800, color: 'var(--gold)', letterSpacing: 0.5 }}>
+              OBJECTIF MULTIPLICATEUR REVENU ({multiplierFactor})
             </span>
           </div>
-          <span style={{ fontSize: 11, color: '#fff', fontFamily: 'var(--font-hud)', fontWeight: 700 }}>
-            {incomePercent}% ATTEINT
-          </span>
+          
+          <button
+            onClick={() => {
+              setEditSalaryInput(finances.monthlySalary || '');
+              setEditTargetInput(finances.targetIncome || '');
+              setIsSalaryModalOpen(true);
+            }}
+            style={{
+              background: 'rgba(255, 215, 0, 0.15)',
+              border: '1px solid var(--gold)',
+              color: 'var(--gold)',
+              padding: '4px 8px',
+              borderRadius: 6,
+              fontSize: 10,
+              fontFamily: 'var(--font-hud)',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              cursor: 'pointer'
+            }}
+          >
+            <Edit3 size={11} /> MODIFIER
+          </button>
         </div>
 
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', margin: '8px 0 6px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', margin: '8px 0 6px' }}>
           <div>
-            <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>ACTUEL</span>
-            <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-title)', color: '#fff' }}>
-              {formatFCFA(currentSalary)}
+            <span style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>SALAIRE ACTUEL DÉCLARÉ</span>
+            <div style={{ fontSize: 19, fontWeight: 900, fontFamily: 'var(--font-title)', color: currentSalary > 0 ? '#fff' : 'var(--text-dim)' }}>
+              {currentSalary > 0 ? formatFCFA(currentSalary) : '0 FCFA (Non défini)'}
             </div>
           </div>
           <div style={{ textAlign: 'right' }}>
-            <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>CIBLE MENSUELLE</span>
-            <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-title)', color: 'var(--gold)' }}>
-              {formatFCFA(targetIncome)}
+            <span style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>CIBLE MENSUELLE VISÉE</span>
+            <div style={{ fontSize: 19, fontWeight: 900, fontFamily: 'var(--font-title)', color: targetIncome > 0 ? 'var(--gold)' : 'var(--text-dim)' }}>
+              {targetIncome > 0 ? formatFCFA(targetIncome) : 'Non définie'}
             </div>
           </div>
         </div>
@@ -465,16 +711,127 @@ export default function FinancesView({
         <div className="hud-bar-container" style={{ height: 8 }}>
           <div className="hud-bar-fill gold" style={{ width: `${incomePercent}%` }} />
         </div>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 9, color: 'var(--text-muted)' }}>
+          <span>Progression : {incomePercent}%</span>
+          {targetIncome > currentSalary && (
+            <span>Manque : {formatFCFA(targetIncome - currentSalary)}/mois</span>
+          )}
+        </div>
       </div>
 
-      {/* 2. Sub-Tabs Navigation (Complete LifeOS Navigation) */}
+      {/* Salary & Target Income Modal */}
+      {isSalaryModalOpen && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          zIndex: 200,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16
+        }}>
+          <div className="neuro-card" style={{ width: '100%', maxWidth: 420, borderColor: 'var(--gold)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Wallet size={16} color="var(--gold)" />
+                <span style={{ fontFamily: 'var(--font-title)', fontSize: 13, fontWeight: 800, color: 'var(--gold)' }}>
+                  RÉGLAGE DE VOS REVENUS
+                </span>
+              </div>
+              <button 
+                onClick={() => setIsSalaryModalOpen(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+              Définissez votre salaire net mensuel réel ainsi que votre objectif de revenu multiplicateur. Les calculs de reste à vivre et de fonds d'urgence s'ajusteront instantanément.
+            </p>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 16 }}>
+              <div>
+                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 4 }}>
+                  SALAIRE MENSUEL ACTUEL (FCFA) :
+                </label>
+                <input 
+                  type="number"
+                  placeholder="Ex : 250000"
+                  value={editSalaryInput}
+                  onChange={(e) => setEditSalaryInput(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: '1px solid var(--border-cyan-dim)',
+                    borderRadius: 6,
+                    color: '#fff',
+                    padding: '8px 10px',
+                    fontSize: 14,
+                    fontFamily: 'var(--font-hud)',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 10, color: 'var(--gold)', display: 'block', marginBottom: 4 }}>
+                  CIBLE MENSUELLE VISÉE (FCFA) :
+                </label>
+                <input 
+                  type="number"
+                  placeholder="Ex : 1000000"
+                  value={editTargetInput}
+                  onChange={(e) => setEditTargetInput(e.target.value)}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(0,0,0,0.5)',
+                    border: '1px solid var(--gold)',
+                    borderRadius: 6,
+                    color: '#fff',
+                    padding: '8px 10px',
+                    fontSize: 14,
+                    fontFamily: 'var(--font-hud)',
+                    boxSizing: 'border-box'
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={() => setIsSalaryModalOpen(false)}
+                style={{ flex: 1, padding: '10px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', color: 'var(--text-muted)', borderRadius: 6, cursor: 'pointer', fontSize: 11 }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={handleSaveSalary}
+                className="btn-monarch"
+                style={{ flex: 2, padding: '10px', fontSize: 11, background: 'linear-gradient(135deg, rgba(255,215,0,0.2), rgba(255,165,0,0.3))', borderColor: 'var(--gold)', color: '#fff' }}
+              >
+                Enregistrer les revenus
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 2. Sub-Tabs Navigation (Complete Neuro-Ergonomic LifeOS Navigation) */}
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
         {[
-          { id: 'budget', label: 'BUDGET & 120J' },
-          { id: 'accounts', label: `COMPTES (${finances.accounts?.length || 0})` },
-          { id: 'patrimoine', label: 'PATRIMOINE & DETTES' },
-          { id: 'investments', label: 'INVESTISSEMENTS & BRVM' },
-          { id: 'decisions', label: 'DÉCISIONS & SIMUS' },
+          { id: 'cockpit', label: '📊 COCKPIT' },
+          { id: 'budget', label: '💼 BUDGET & 120J' },
+          { id: 'accounts', label: `💳 COMPTES (${finances.accounts?.length || 0})` },
+          { id: 'patrimoine', label: '🏛️ PATRIMOINE' },
+          { id: 'investments', label: '📈 BRVM & INTÉRÊTS' },
+          { id: 'goals', label: `🎯 OBJECTIFS (${finances.goals?.length || 0})` },
+          { id: 'decisions', label: '⚖️ DÉCISIONS' },
           { id: 'settings', label: '⚙️ PARAMÈTRES FOYER' },
         ].map(st => (
           <button
@@ -484,7 +841,7 @@ export default function FinancesView({
               setActiveSubTab(st.id);
             }}
             style={{
-              padding: '6px 10px',
+              padding: '6px 11px',
               fontSize: 10,
               fontFamily: 'var(--font-hud)',
               fontWeight: 700,
@@ -493,7 +850,8 @@ export default function FinancesView({
               background: activeSubTab === st.id ? 'rgba(0,217,255,0.2)' : 'rgba(0,0,0,0.4)',
               color: activeSubTab === st.id ? 'var(--border-cyan)' : 'var(--text-muted)',
               cursor: 'pointer',
-              whiteSpace: 'nowrap'
+              whiteSpace: 'nowrap',
+              transition: 'all 0.15s ease'
             }}
           >
             {st.label}
@@ -501,12 +859,92 @@ export default function FinancesView({
         ))}
       </div>
 
+      {/* ================= SUB-TAB 0: COCKPIT & ALERTES ================= */}
+      {activeSubTab === 'cockpit' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Trésorerie disponible & Reste à vivre */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            <div className="neuro-card" style={{ padding: '12px' }}>
+              <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>TRÉSORERIE DISPONIBLE</div>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-title)', color: cashStatus.availableCash > 0 ? 'var(--neon-green)' : 'var(--alert-red)' }}>
+                {formatFCFA(cashStatus.availableCash)}
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Marge protégée : {formatCompactFCFA(finances.settings?.safetyMargin || 0)}</div>
+            </div>
+
+            <div className="neuro-card" style={{ padding: '12px' }}>
+              <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>RESTE À VIVRE MENSUEL</div>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-title)', color: resteAVivre >= 0 ? 'var(--border-cyan)' : 'var(--alert-red)' }}>
+                {formatFCFA(resteAVivre)}
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Après enveloppes mensuelles</div>
+            </div>
+          </div>
+
+          {/* Fonds d'urgence & Indépendance financière */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+            <div className="neuro-card" style={{ padding: '12px' }}>
+              <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>FONDS D'URGENCE ({efStatus.months}M)</div>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-title)', color: efStatus.percent >= 100 ? 'var(--neon-green)' : 'var(--gold)' }}>
+                {efStatus.percent}%
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{formatCompactFCFA(efStatus.available)} / {formatCompactFCFA(efStatus.target)}</div>
+            </div>
+
+            <div className="neuro-card" style={{ padding: '12px' }}>
+              <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>COUVERTURE HORS-SALAIRE</div>
+              <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-title)', color: nonSalaryCoverage.coverageRatio >= 100 ? 'var(--neon-green)' : 'var(--border-cyan)' }}>
+                {nonSalaryCoverage.coverageRatio}%
+              </div>
+              <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{formatCompactFCFA(nonSalaryCoverage.nonSalaryMonthly)}/mois générés</div>
+            </div>
+          </div>
+
+          {/* Automated Financial Alerts */}
+          <div className="neuro-card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <AlertCircle size={15} color="var(--border-cyan)" />
+              <span className="system-window-title">ALERTES & SÉRÉNITÉ DU FOYER</span>
+            </div>
+
+            {financialAlerts.length === 0 ? (
+              <div style={{ padding: '10px', background: 'rgba(0,255,136,0.06)', borderRadius: 6, border: '1px solid rgba(0,255,136,0.2)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <CheckCircle2 size={16} color="var(--neon-green)" />
+                <span style={{ fontSize: 11, color: '#fff' }}>Aucune anomalie détectée. Trésorerie et charges sous contrôle parfait.</span>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {financialAlerts.map(alt => (
+                  <div 
+                    key={alt.id}
+                    style={{
+                      padding: '8px 10px',
+                      borderRadius: 6,
+                      background: alt.level === 'alert' ? 'rgba(255,46,76,0.1)' : 'rgba(255,215,0,0.1)',
+                      border: `1px solid ${alt.level === 'alert' ? 'var(--alert-red)' : 'var(--gold)'}`,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 2
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: 700, color: alt.level === 'alert' ? 'var(--alert-red)' : 'var(--gold)' }}>
+                      {alt.title}
+                    </div>
+                    <div style={{ fontSize: 10, color: '#fff' }}>{alt.message}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ================= SUB-TAB 1: BUDGET & 120 JOURS ================= */}
       {activeSubTab === 'budget' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Quick Financial Overview Cards */}
           <div style={{ display: 'flex', gap: 10 }}>
-            <div className="system-window" style={{ flex: 1, padding: '12px' }}>
+            <div className="neuro-card" style={{ flex: 1, padding: '12px' }}>
               <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>RESTE À VIVRE LIBRE</div>
               <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-title)', color: resteAVivre >= 0 ? 'var(--neon-green)' : 'var(--alert-red)' }}>
                 {formatFCFA(resteAVivre)}
@@ -514,7 +952,7 @@ export default function FinancesView({
               <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>Après enveloppes mensuelles</div>
             </div>
 
-            <div className="system-window" style={{ flex: 1, padding: '12px' }}>
+            <div className="neuro-card" style={{ flex: 1, padding: '12px' }}>
               <div style={{ fontSize: 9, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>FONDS D'URGENCE ({efStatus.months} MOIS)</div>
               <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-title)', color: efStatus.percent >= 100 ? 'var(--neon-green)' : 'var(--gold)' }}>
                 {efStatus.percent}% ({formatCompactFCFA(efStatus.available)}/{formatCompactFCFA(efStatus.target)})
@@ -524,7 +962,7 @@ export default function FinancesView({
           </div>
 
           {/* Envelopes list */}
-          <div className="system-window" style={{ padding: '14px' }}>
+          <div className="neuro-card" style={{ padding: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <span className="system-window-title">ENVELOPPES DU BUDGET MENSUEL</span>
               <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Total alloué: {formatFCFA(totalAllocatedEnvelopes)}</span>
@@ -536,11 +974,19 @@ export default function FinancesView({
                 const isOver = (env.spent || 0) > (env.allocated || 0);
                 return (
                   <div key={env.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-cyan-dim)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{env.name}</span>
-                      <span style={{ fontSize: 11, fontWeight: 700, color: isOver ? 'var(--alert-red)' : 'var(--border-cyan)' }}>
-                        {formatFCFA(env.spent || 0)} / {formatFCFA(env.allocated || 0)}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: isOver ? 'var(--alert-red)' : 'var(--border-cyan)' }}>
+                          {formatFCFA(env.spent || 0)} / {formatFCFA(env.allocated || 0)}
+                        </span>
+                        <button 
+                          onClick={() => handleDeleteEnvelope(env.id)}
+                          style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 2 }}
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
                     </div>
                     <div className="hud-bar-container" style={{ height: 6 }}>
                       <div className={`hud-bar-fill ${isOver ? 'red' : ''}`} style={{ width: `${percent}%` }} />
@@ -549,34 +995,111 @@ export default function FinancesView({
                 );
               })}
             </div>
+
+            {/* Ajouter une enveloppe */}
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-cyan-dim)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input 
+                type="text"
+                placeholder="Nouvelle enveloppe (ex: Épargne projet)"
+                value={newEnvName}
+                onChange={(e) => setNewEnvName(e.target.value)}
+                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <input 
+                type="number"
+                placeholder="Budget alloué FCFA"
+                value={newEnvAllocated}
+                onChange={(e) => setNewEnvAllocated(e.target.value)}
+                style={{ flex: 1, minWidth: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <button onClick={handleAddEnvelope} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
+                Ajouter
+              </button>
+            </div>
           </div>
 
           {/* Charges Récurrentes & Échéancier 120 Jours */}
-          <div className="system-window" style={{ padding: '14px' }}>
+          <div className="neuro-card" style={{ padding: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span className="system-window-title">CHARGES RÉCURRENTES & PROVISIONS</span>
-              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Échéances des 120 prochains jours</span>
+              <span className="system-window-title">CHARGES RÉCURRENTES (ÉCHÉANCIER 120J)</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Charges prévues</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {(finances.charges || []).map(ch => (
-                <div key={ch.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-cyan-dim)' }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{ch.label}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>
-                      Échéance: {ch.nextDueDate || 'Mensuelle'} • {ch.frequency}
+            {finances.charges?.length === 0 ? (
+              <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11, background: 'rgba(0,0,0,0.2)', borderRadius: 6 }}>
+                Aucune charge récurrente enregistrée. Ajoutez vos charges fixes (loyer, abonnements, etc.) ci-dessous.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {(finances.charges || []).map(ch => (
+                  <div key={ch.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-cyan-dim)' }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{ch.label}</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>
+                        Échéance: {ch.nextDueDate || 'Mensuelle'} • {ch.frequency}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gold)', fontFamily: 'var(--font-hud)' }}>
+                          {formatFCFA(ch.amount)}
+                        </div>
+                        <span style={{ fontSize: 8, padding: '2px 5px', borderRadius: 4, background: ch.active ? 'rgba(0,255,136,0.1)' : 'rgba(255,46,76,0.1)', color: ch.active ? 'var(--neon-green)' : 'var(--alert-red)' }}>
+                          {ch.active ? 'ACTIF' : 'INACTIF'}
+                        </span>
+                      </div>
+                      <button 
+                        onClick={() => handleDeleteCharge(ch.id)}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 2 }}
+                      >
+                        <Trash2 size={12} />
+                      </button>
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--gold)', fontFamily: 'var(--font-hud)' }}>
-                      {formatFCFA(ch.amount)}
-                    </div>
-                    <span style={{ fontSize: 8, padding: '2px 5px', borderRadius: 4, background: ch.active ? 'rgba(0,255,136,0.1)' : 'rgba(255,46,76,0.1)', color: ch.active ? 'var(--neon-green)' : 'var(--alert-red)' }}>
-                      {ch.active ? 'ACTIF' : 'INACTIF'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+
+            {/* Ajouter une charge récurrente */}
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-cyan-dim)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input 
+                type="text"
+                placeholder="Libellé charge (ex: Loyer, Électricité)"
+                value={newChargeLabel}
+                onChange={(e) => setNewChargeLabel(e.target.value)}
+                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <input 
+                type="number"
+                placeholder="Montant FCFA"
+                value={newChargeAmount}
+                onChange={(e) => setNewChargeAmount(e.target.value)}
+                style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <input 
+                type="date"
+                value={newChargeDue}
+                onChange={(e) => setNewChargeDue(e.target.value)}
+                style={{ width: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <button onClick={handleAddCharge} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
+                Ajouter Charge
+              </button>
+            </div>
+          </div>
+
+          {/* Clôture mensuelle snapshot */}
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--gold)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <span className="system-window-title" style={{ color: 'var(--gold)' }}>CLÔTURE COMPTABLE DU MOIS</span>
+                <p style={{ fontSize: 10, color: 'var(--text-muted)', margin: '4px 0 0' }}>
+                  Figez un snapshot officiel de votre patrimoine et trésorerie pour historiser vos progrès.
+                </p>
+              </div>
+              <button onClick={handleSnapshotMonth} className="btn-monarch" style={{ fontSize: 10, padding: '8px 12px', background: 'rgba(255,215,0,0.15)', borderColor: 'var(--gold)', color: 'var(--gold)' }}>
+                Figer le mois (+20 XP)
+              </button>
             </div>
           </div>
         </div>
@@ -586,7 +1109,7 @@ export default function FinancesView({
       {activeSubTab === 'accounts' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           {/* Trésorerie globale */}
-          <div className="system-window" style={{ padding: '14px', borderColor: 'var(--border-cyan)' }}>
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--border-cyan)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
               <span className="system-window-title">TRÉSORERIE RÉELLEMENT DISPONIBLE</span>
               <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Marge non mobilisable: {formatFCFA(finances.settings?.safetyMargin || 0)}</span>
@@ -600,26 +1123,40 @@ export default function FinancesView({
           </div>
 
           {/* Liste des comptes réels */}
-          <div className="system-window" style={{ padding: '14px' }}>
+          <div className="neuro-card" style={{ padding: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <span className="system-window-title">SOLDES RÉELS PAR COMPTE</span>
               <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Sources de vérité</span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-              {(finances.accounts || []).map(acc => {
-                const bal = cashStatus.balances.get(acc.id)?.balance || 0;
-                return (
-                  <div key={acc.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-cyan-dim)' }}>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{acc.type}</div>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', margin: '2px 0 4px' }}>{acc.name}</div>
-                    <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-hud)', color: bal >= 0 ? 'var(--border-cyan)' : 'var(--alert-red)' }}>
-                      {formatFCFA(bal)}
+            {finances.accounts?.length === 0 ? (
+              <div style={{ padding: '14px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11, background: 'rgba(0,0,0,0.2)', borderRadius: 6, marginBottom: 10 }}>
+                Aucun compte configuré. Ajoutez votre premier compte (ex: Wave, Portefeuille Cash, Banque) ci-dessous.
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }}>
+                {(finances.accounts || []).map(acc => {
+                  const bal = cashStatus.balances.get(acc.id)?.balance || 0;
+                  return (
+                    <div key={acc.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-cyan-dim)', position: 'relative' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>{acc.type}</span>
+                        <button 
+                          onClick={() => handleDeleteAccount(acc.id)}
+                          style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 2 }}
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', margin: '2px 0 4px' }}>{acc.name}</div>
+                      <div style={{ fontSize: 16, fontWeight: 900, fontFamily: 'var(--font-hud)', color: bal >= 0 ? 'var(--border-cyan)' : 'var(--alert-red)' }}>
+                        {formatFCFA(bal)}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            )}
 
             {/* Nouveau compte */}
             <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-cyan-dim)' }}>
@@ -627,15 +1164,15 @@ export default function FinancesView({
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <input 
                   type="text" 
-                  placeholder="Nom (ex: Moov Money, Ecobank)" 
+                  placeholder="Nom (ex: Wave, Ecobank, Espèces)" 
                   value={newAccName} 
                   onChange={(e) => setNewAccName(e.target.value)} 
-                  style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                  style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
                 />
                 <select 
                   value={newAccType} 
                   onChange={(e) => setNewAccType(e.target.value)} 
-                  style={{ flex: 1, minWidth: 110, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
+                  style={{ flex: 1, minWidth: 110, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
                 >
                   <option value="MOBILE_MONEY">Mobile Money</option>
                   <option value="BANK">Banque</option>
@@ -649,36 +1186,36 @@ export default function FinancesView({
                   placeholder="Solde initial" 
                   value={newAccBalance} 
                   onChange={(e) => setNewAccBalance(e.target.value)} 
-                  style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                  style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
                 />
                 <button onClick={handleAddAccount} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                  Créer
+                  Créer Compte
                 </button>
               </div>
             </div>
           </div>
 
           {/* Virement entre comptes (Zéro fausse dépense) */}
-          <div className="system-window" style={{ padding: '14px', borderColor: 'var(--neon-green)' }}>
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--neon-green)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <ArrowLeftRight size={16} color="var(--neon-green)" />
-              <span className="system-window-title" style={{ color: 'var(--neon-green)' }}>VIREMENT ENTRE COMPTES (SANS FAUSSE DÉPENSE)</span>
+              <span className="system-window-title" style={{ color: 'var(--neon-green)' }}>VIREMENT INTER-COMPTES (SANS FAUSSE DÉPENSE)</span>
             </div>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              Un transfert déplace l'argent d'un compte à un autre sans créer ni faux revenu ni fausse dépense. Seuls les frais éventuels sont comptabilisés.
+              Un transfert déplace l'argent d'un compte à un autre sans créer de fausse dépense. Seuls les frais éventuels sont comptabilisés.
             </p>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
               <select 
                 value={transferFrom} 
                 onChange={(e) => setTransferFrom(e.target.value)} 
-                style={{ flex: 1, minWidth: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
+                style={{ flex: 1, minWidth: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
               >
                 {(finances.accounts || []).map(a => <option key={a.id} value={a.id}>De : {a.name}</option>)}
               </select>
               <select 
                 value={transferTo} 
                 onChange={(e) => setTransferTo(e.target.value)} 
-                style={{ flex: 1, minWidth: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
+                style={{ flex: 1, minWidth: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
               >
                 {(finances.accounts || []).map(a => <option key={a.id} value={a.id}>Vers : {a.name}</option>)}
               </select>
@@ -687,14 +1224,14 @@ export default function FinancesView({
                 placeholder="Montant FCFA" 
                 value={transferAmount} 
                 onChange={(e) => setTransferAmount(e.target.value)} 
-                style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <input 
                 type="number" 
                 placeholder="Frais (ex: 100)" 
                 value={transferFee} 
                 onChange={(e) => setTransferFee(e.target.value)} 
-                style={{ width: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ width: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <button onClick={handleTransfer} className="btn-monarch" style={{ fontSize: 10, padding: '6px 14px' }}>
                 Transférer
@@ -703,7 +1240,7 @@ export default function FinancesView({
           </div>
 
           {/* Saisie rapide d'opération & Historique */}
-          <div className="system-window" style={{ padding: '14px' }}>
+          <div className="neuro-card" style={{ padding: '14px' }}>
             <span className="system-window-title" style={{ display: 'block', marginBottom: 8 }}>ENREGISTRER UNE TRANSACTION</span>
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
               <input 
@@ -711,19 +1248,19 @@ export default function FinancesView({
                 placeholder="Libellé de la dépense/revenu" 
                 value={txLabel} 
                 onChange={(e) => setTxLabel(e.target.value)} 
-                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <input 
                 type="number" 
                 placeholder="Montant" 
                 value={txAmount} 
                 onChange={(e) => setTxAmount(e.target.value)} 
-                style={{ flex: 1, minWidth: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ flex: 1, minWidth: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <select 
                 value={txType} 
                 onChange={(e) => setTxType(e.target.value)} 
-                style={{ width: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
+                style={{ width: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
               >
                 <option value="EXPENSE">Dépense</option>
                 <option value="INCOME">Revenu</option>
@@ -733,7 +1270,7 @@ export default function FinancesView({
               <select 
                 value={txAccount} 
                 onChange={(e) => setTxAccount(e.target.value)} 
-                style={{ flex: 1, minWidth: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
+                style={{ flex: 1, minWidth: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
               >
                 {(finances.accounts || []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
               </select>
@@ -742,21 +1279,62 @@ export default function FinancesView({
               </button>
             </div>
 
-            {/* Historique des 30 dernières transactions */}
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)', marginBottom: 6 }}>JOURNAL DES DERNIÈRES TRANSACTIONS</div>
-            <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(finances.transactions || []).slice(0, 30).map(tx => (
-                <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.25)', padding: '6px 10px', borderRadius: 6, fontSize: 11 }}>
-                  <div>
-                    <span style={{ fontWeight: 700, color: '#fff' }}>{tx.label}</span>
-                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{tx.date} • {tx.type}</div>
-                  </div>
-                  <div style={{ textAlign: 'right', fontWeight: 800, fontFamily: 'var(--font-hud)', color: tx.type === 'INCOME' ? 'var(--neon-green)' : tx.type === 'TRANSFER' ? 'var(--border-cyan)' : 'var(--text-main)' }}>
-                    {tx.type === 'INCOME' ? '+' : tx.type === 'TRANSFER' ? '↔' : '−'}{formatFCFA(tx.amount)}
-                  </div>
-                </div>
-              ))}
+            {/* Filtres de journal */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-dim)' }}>JOURNAL DES TRANSACTIONS</div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {['ALL', 'EXPENSE', 'INCOME', 'TRANSFER'].map(f => (
+                  <button
+                    key={f}
+                    onClick={() => setTxFilter(f)}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: 9,
+                      borderRadius: 4,
+                      background: txFilter === f ? 'var(--border-cyan)' : 'rgba(0,0,0,0.3)',
+                      color: txFilter === f ? '#000' : 'var(--text-muted)',
+                      border: 'none',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    {f === 'ALL' ? 'Toutes' : f === 'EXPENSE' ? 'Dépenses' : f === 'INCOME' ? 'Revenus' : 'Virements'}
+                  </button>
+                ))}
+              </div>
             </div>
+
+            {/* Historique des transactions */}
+            {filteredTransactions.length === 0 ? (
+              <div style={{ padding: '10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 10 }}>
+                Aucune transaction dans cette vue.
+              </div>
+            ) : (
+              <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {filteredTransactions.slice(0, 30).map(tx => (
+                  <div key={tx.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.25)', padding: '6px 10px', borderRadius: 6, fontSize: 11 }}>
+                    <div>
+                      <div style={{ fontWeight: 700, color: '#fff' }}>{tx.label}</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{tx.date} • {tx.type}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{
+                        fontWeight: 800,
+                        fontFamily: 'var(--font-hud)',
+                        color: tx.type === 'INCOME' ? 'var(--neon-green)' : tx.type === 'TRANSFER' ? 'var(--border-cyan)' : 'var(--alert-red)'
+                      }}>
+                        {tx.type === 'INCOME' ? '+' : tx.type === 'TRANSFER' ? '⇄ ' : '−'}{formatFCFA(tx.amount)}
+                      </span>
+                      <button 
+                        onClick={() => handleDeleteTransaction(tx.id)}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 2 }}
+                      >
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -764,256 +1342,291 @@ export default function FinancesView({
       {/* ================= SUB-TAB 3: PATRIMOINE & DETTES ================= */}
       {activeSubTab === 'patrimoine' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Valeur Nette KPI Header */}
-          <div className="system-window corner-cut" style={{ padding: '16px', borderColor: 'var(--border-cyan)' }}>
-            <span className="system-window-title">VALEUR NETTE DU PATRIMOINE DU FOYER</span>
-            <div style={{ fontSize: 26, fontWeight: 900, fontFamily: 'var(--font-title)', color: netWorthData.netWorth >= 0 ? 'var(--border-cyan)' : 'var(--alert-red)', margin: '6px 0' }}>
+          {/* Net Worth Summary */}
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--gold)' }}>
+            <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>VALEUR NETTE DU PATRIMOINE</div>
+            <div style={{ fontSize: 26, fontWeight: 900, fontFamily: 'var(--font-title)', color: netWorthData.netWorth >= 0 ? 'var(--gold)' : 'var(--alert-red)', margin: '4px 0' }}>
               {formatFCFA(netWorthData.netWorth)}
             </div>
-            <div style={{ display: 'flex', gap: 12, fontSize: 11, color: 'var(--text-muted)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)' }}>
               <span>Actifs bruts : <strong>{formatFCFA(netWorthData.grossWorth)}</strong></span>
-              <span>•</span>
-              <span style={{ color: 'var(--alert-red)' }}>Dettes / Passifs : <strong>{formatFCFA(netWorthData.totalLiabilities)}</strong></span>
+              <span>Dettes : <strong style={{ color: 'var(--alert-red)' }}>{formatFCFA(netWorthData.totalLiabilities)}</strong></span>
             </div>
           </div>
 
-          {/* Actifs Physiques & Immobiliers */}
-          <div className="system-window" style={{ padding: '14px' }}>
+          {/* Actifs physiques & terrains */}
+          <div className="neuro-card" style={{ padding: '14px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span className="system-window-title">ACTIFS DU PATRIMOINE ({formatFCFA(netWorthData.totalAssets)})</span>
+              <span className="system-window-title">ACTIFS PHYSIQUES & IMMOBILIERS</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Total : {formatFCFA(netWorthData.totalAssets)}</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-              {(finances.assets || []).map(ast => (
-                <div key={ast.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border-cyan-dim)' }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{ast.name}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>Type : {ast.type} • {ast.notes}</div>
+            {finances.assets?.length === 0 ? (
+              <div style={{ padding: '10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>
+                Aucun actif physique enregistré pour l'instant.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                {(finances.assets || []).map(ast => (
+                  <div key={ast.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 10px', borderRadius: 6 }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{ast.name}</div>
+                      <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{ast.type}</div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--border-cyan)' }}>{formatFCFA(ast.value)}</span>
+                      <button onClick={() => handleDeleteAsset(ast.id)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                        <Trash2 size={11} />
+                      </button>
+                    </div>
                   </div>
-                  <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-hud)', color: 'var(--border-cyan)' }}>
-                    {formatFCFA(ast.value)}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
-            {/* Ajouter un actif */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {/* Formulaire ajout actif */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border-cyan-dim)' }}>
               <input 
                 type="text" 
-                placeholder="Nom de l'actif (ex: Terrain Agoè, Moto)" 
+                placeholder="Nom (ex: Terrain Kpalimé, Moto)" 
                 value={newAssetName} 
                 onChange={(e) => setNewAssetName(e.target.value)} 
-                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <select 
                 value={newAssetType} 
                 onChange={(e) => setNewAssetType(e.target.value)} 
-                style={{ flex: 1, minWidth: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
+                style={{ width: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
               >
                 <option value="LAND">Terrain</option>
-                <option value="HOUSE">Maison</option>
-                <option value="CAR">Voiture</option>
-                <option value="MOTO">Moto</option>
-                <option value="BUSINESS">Business</option>
-                <option value="OTHER">Autre actif</option>
+                <option value="BUILDING">Immobilier</option>
+                <option value="VEHICLE">Véhicule</option>
+                <option value="EQUIPMENT">Matériel</option>
+                <option value="OTHER">Autre</option>
               </select>
               <input 
                 type="number" 
                 placeholder="Valeur FCFA" 
                 value={newAssetValue} 
                 onChange={(e) => setNewAssetValue(e.target.value)} 
-                style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <button onClick={handleAddAsset} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                Ajouter
+                Ajouter Actif
               </button>
             </div>
           </div>
 
-          {/* Passifs & Dettes */}
-          <div className="system-window" style={{ padding: '14px', borderColor: 'var(--alert-red)' }}>
+          {/* Dettes & Passifs */}
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--alert-red)' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <span className="system-window-title" style={{ color: 'var(--alert-red)' }}>PASSIFS & DETTES DU FOYER ({formatFCFA(netWorthData.totalLiabilities)})</span>
+              <span className="system-window-title" style={{ color: 'var(--alert-red)' }}>DETTES & ENGAGEMENTS FINANCIERS</span>
+              <span style={{ fontSize: 10, color: 'var(--alert-red)' }}>Total : {formatFCFA(netWorthData.totalLiabilities)}</span>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-              {(finances.liabilities || []).length === 0 ? (
-                <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>Aucune dette enregistrée. Bravo !</p>
-              ) : (
-                (finances.liabilities || []).map(liab => (
-                  <div key={liab.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,46,76,0.1)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--alert-red-dim)' }}>
+            {finances.liabilities?.length === 0 ? (
+              <div style={{ padding: '10px', textAlign: 'center', color: 'var(--neon-green)', fontSize: 11, background: 'rgba(0,255,136,0.05)', borderRadius: 6 }}>
+                ✓ Aucune dette déclarée. Liberté financière totale !
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+                {(finances.liabilities || []).map(l => (
+                  <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 10px', borderRadius: 6 }}>
                     <div>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{liab.name}</div>
-                      <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{liab.notes}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{l.name}</div>
+                      {l.monthlyPayment > 0 && (
+                        <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>Mensualité : {formatFCFA(l.monthlyPayment)}/mois</div>
+                      )}
                     </div>
-                    <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-hud)', color: 'var(--alert-red)' }}>
-                      −{formatFCFA(liab.amount)}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--alert-red)' }}>{formatFCFA(l.amount)}</span>
+                      <button onClick={() => handleDeleteLiability(l.id)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                        <Trash2 size={11} />
+                      </button>
                     </div>
                   </div>
-                ))
-              )}
-            </div>
+                ))}
+              </div>
+            )}
 
-            {/* Ajouter une dette */}
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            {/* Formulaire ajout dette */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border-cyan-dim)' }}>
               <input 
                 type="text" 
-                placeholder="Libellé du passif (ex: Emprunt, avance)" 
+                placeholder="Libellé dette (ex: Prêt équipement)" 
                 value={newLiabName} 
                 onChange={(e) => setNewLiabName(e.target.value)} 
-                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--alert-red-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <input 
                 type="number" 
-                placeholder="Montant FCFA" 
+                placeholder="Montant total" 
                 value={newLiabAmount} 
                 onChange={(e) => setNewLiabAmount(e.target.value)} 
-                style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--alert-red-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                style={{ flex: 1, minWidth: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
-              <button onClick={handleAddLiability} className="btn-monarch btn-danger" style={{ fontSize: 10, padding: '6px 12px' }}>
-                Enregistrer dette
+              <input 
+                type="number" 
+                placeholder="Mensualité" 
+                value={newLiabMonthly} 
+                onChange={(e) => setNewLiabMonthly(e.target.value)} 
+                style={{ width: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
+              />
+              <button onClick={handleAddLiability} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
+                Ajouter Dette
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ================= SUB-TAB 4: INVESTISSEMENTS & BRVM ================= */}
+      {/* ================= SUB-TAB 4: BRVM & INTÉRÊTS COMPOSÉS ================= */}
       {activeSubTab === 'investments' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Portefeuille BRVM Header */}
-          <div className="system-window" style={{ padding: '14px', borderColor: 'var(--gold)' }}>
-            <span className="system-window-title" style={{ color: 'var(--gold)' }}>PORTEFEUILLE D'ACTIONS BRVM</span>
-            <div style={{ fontSize: 22, fontWeight: 900, fontFamily: 'var(--font-title)', color: 'var(--gold)', margin: '4px 0' }}>
-              {formatFCFA(netWorthData.totalBrvm)}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-              Actions cotées à la BRVM (jamais mélangées aux simulations)
-            </div>
-          </div>
-
-          {/* Lignes BRVM */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
-              {(finances.positions || []).map(pos => {
-                const totalCost = (pos.quantity || 0) * (pos.avgBuyPrice || 0);
-                const curVal = (pos.quantity || 0) * (pos.currentPrice || pos.avgBuyPrice || 0);
-                const gain = curVal - totalCost;
-                const gainPct = totalCost > 0 ? Math.round((gain / totalCost) * 100) : 0;
-
-                return (
-                  <div key={pos.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-cyan-dim)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                      <div>
-                        <span style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-title)', color: '#fff' }}>{pos.company}</span>
-                        <span style={{ fontSize: 10, color: 'var(--border-cyan)', marginLeft: 6, fontWeight: 700 }}>({pos.ticker})</span>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-hud)', color: gain >= 0 ? 'var(--neon-green)' : 'var(--alert-red)' }}>
-                        {formatFCFA(curVal)} ({gain >= 0 ? '+' : ''}{gainPct}%)
-                      </div>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-dim)', marginTop: 4 }}>
-                      <span>{pos.quantity} titres • PRU: {formatFCFA(pos.avgBuyPrice)}</span>
-                      <span>Cours: {formatFCFA(pos.currentPrice)} • Dividendes: {formatFCFA(pos.dividends || 0)}</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Ajouter un titre BRVM */}
-            <div style={{ borderTop: '1px solid var(--border-cyan-dim)', paddingTop: 10 }}>
-              <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--border-cyan)', marginBottom: 6 }}>+ NOUVEAU TITRE / LIGNE BRVM</div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                <input 
-                  type="text" 
-                  placeholder="Société (ex: SOGB)" 
-                  value={newPosCompany} 
-                  onChange={(e) => setNewPosCompany(e.target.value)} 
-                  style={{ flex: 1, minWidth: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
-                />
-                <input 
-                  type="text" 
-                  placeholder="Ticker" 
-                  value={newPosTicker} 
-                  onChange={(e) => setNewPosTicker(e.target.value)} 
-                  style={{ width: 70, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
-                />
-                <input 
-                  type="number" 
-                  placeholder="Qté" 
-                  value={newPosQty} 
-                  onChange={(e) => setNewPosQty(e.target.value)} 
-                  style={{ width: 60, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
-                />
-                <input 
-                  type="number" 
-                  placeholder="PRU" 
-                  value={newPosBuyPrice} 
-                  onChange={(e) => setNewPosBuyPrice(e.target.value)} 
-                  style={{ width: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
-                />
-                <button onClick={handleAddPosition} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                  Ajouter
-                </button>
+          {/* Portefeuille BRVM */}
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--gold)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <div>
+                <span className="system-window-title" style={{ color: 'var(--gold)' }}>PORTEFEUILLE TITRES BOURSIERS (BRVM)</span>
+                <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Valeur totale : {formatFCFA(netWorthData.totalBrvm)}</div>
               </div>
+            </div>
+
+            {finances.positions?.length === 0 ? (
+              <div style={{ padding: '10px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11 }}>
+                Aucune action enregistrée. Ajoutez vos positions BRVM (SNTS, SOLIBRA, ECOBANK...) ci-dessous.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                {(finances.positions || []).map(pos => {
+                  const val = (pos.quantity || 0) * (pos.currentPrice || pos.avgBuyPrice || 0);
+                  const cost = (pos.quantity || 0) * (pos.avgBuyPrice || 0);
+                  const pnl = val - cost;
+                  const pnlPct = cost > 0 ? Math.round((pnl / cost) * 100) : 0;
+                  return (
+                    <div key={pos.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 10px', borderRadius: 6 }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{pos.ticker} — {pos.companyName}</div>
+                        <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>
+                          {pos.quantity} titres • PRU : {formatFCFA(pos.avgBuyPrice)} • Cours : {formatFCFA(pos.currentPrice)}
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ textAlign: 'right' }}>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>{formatFCFA(val)}</div>
+                          <div style={{ fontSize: 9, color: pnl >= 0 ? 'var(--neon-green)' : 'var(--alert-red)' }}>
+                            {pnl >= 0 ? '+' : ''}{formatFCFA(pnl)} ({pnlPct}%)
+                          </div>
+                        </div>
+                        <button onClick={() => handleDeletePosition(pos.id)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                          <Trash2 size={11} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Formulaire ajout position BRVM */}
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border-cyan-dim)' }}>
+              <input 
+                type="text" 
+                placeholder="Ticker (ex: SNTS)" 
+                value={newPosTicker} 
+                onChange={(e) => setNewPosTicker(e.target.value)} 
+                style={{ width: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
+              />
+              <input 
+                type="text" 
+                placeholder="Société" 
+                value={newPosCompany} 
+                onChange={(e) => setNewPosCompany(e.target.value)} 
+                style={{ flex: 1, minWidth: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
+              />
+              <input 
+                type="number" 
+                placeholder="Qté" 
+                value={newPosQty} 
+                onChange={(e) => setNewPosQty(e.target.value)} 
+                style={{ width: 60, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
+              />
+              <input 
+                type="number" 
+                placeholder="PRU" 
+                value={newPosBuyPrice} 
+                onChange={(e) => setNewPosBuyPrice(e.target.value)} 
+                style={{ width: 80, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
+              />
+              <input 
+                type="number" 
+                placeholder="Cours actuel" 
+                value={newPosCurrentPrice} 
+                onChange={(e) => setNewPosCurrentPrice(e.target.value)} 
+                style={{ width: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
+              />
+              <button onClick={handleAddBrvmPosition} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
+                Ajouter Titre
+              </button>
             </div>
           </div>
 
           {/* Simulateur d'intérêts composés */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>SIMULATEUR DE RENDEMENT COMPOSÉ</span>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-              <div style={{ flex: 1, minWidth: 100 }}>
-                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Apport initial</span>
+          <div className="neuro-card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Calculator size={15} color="var(--border-cyan)" />
+              <span className="system-window-title">SIMULATEUR D'INTÉRÊTS COMPOSÉS</span>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 12 }}>
+              <div>
+                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Capital initial :</span>
                 <input 
                   type="number" 
                   value={simInitial} 
                   onChange={(e) => setSimInitial(Number(e.target.value))} 
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '4px 6px', fontSize: 11 }} 
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
                 />
               </div>
-              <div style={{ flex: 1, minWidth: 100 }}>
-                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Versement mensuel</span>
+              <div>
+                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Versement mensuel :</span>
                 <input 
                   type="number" 
                   value={simMonthly} 
                   onChange={(e) => setSimMonthly(Number(e.target.value))} 
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '4px 6px', fontSize: 11 }} 
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
                 />
               </div>
-              <div style={{ width: 60 }}>
-                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Années</span>
+              <div>
+                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Durée (années) :</span>
                 <input 
                   type="number" 
                   value={simYears} 
                   onChange={(e) => setSimYears(Number(e.target.value))} 
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '4px 6px', fontSize: 11 }} 
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
                 />
               </div>
-              <div style={{ width: 60 }}>
-                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Taux %</span>
+              <div>
+                <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>Rendement annuel net (%) :</span>
                 <input 
                   type="number" 
                   value={simRate} 
                   onChange={(e) => setSimRate(Number(e.target.value))} 
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '4px 6px', fontSize: 11 }} 
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
                 />
               </div>
             </div>
 
             {(() => {
-              const res = simulateCompoundInterest({ initial: simInitial, monthly: simMonthly, years: simYears, ratePct: simRate, feesPct: 1 });
+              const sim = simulateCompoundInterest({ initial: simInitial, monthly: simMonthly, years: simYears, ratePct: simRate, feesPct: 0 });
               return (
-                <div style={{ background: 'rgba(0,217,255,0.06)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-cyan-dim)' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-                    <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Capital final estimé :</span>
-                    <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--border-cyan)', fontFamily: 'var(--font-hud)' }}>{formatFCFA(res.finalValue)}</span>
+                <div style={{ background: 'rgba(0,217,255,0.06)', border: '1px solid var(--border-cyan)', borderRadius: 8, padding: '12px', textAlign: 'center' }}>
+                  <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>CAPITAL PROJETÉ DANS {simYears} ANS :</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, fontFamily: 'var(--font-title)', color: 'var(--border-cyan)', margin: '4px 0' }}>
+                    {formatFCFA(sim.finalValue)}
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>
-                    <span>Total versé : {formatFCFA(res.totalContributed)}</span>
-                    <span style={{ color: 'var(--neon-green)' }}>Gains générés : +{formatFCFA(res.totalGains)}</span>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>
+                    Total versé : {formatFCFA(sim.totalContributed)} • Gains composés générés : <strong style={{ color: 'var(--neon-green)' }}>+{formatFCFA(sim.totalGains)}</strong>
                   </div>
                 </div>
               );
@@ -1022,107 +1635,170 @@ export default function FinancesView({
         </div>
       )}
 
-      {/* ================= SUB-TAB 5: DÉCISIONS & SIMUS ================= */}
+      {/* ================= SUB-TAB 5: OBJECTIFS FINANCIERS ================= */}
+      {activeSubTab === 'goals' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div className="neuro-card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <span className="system-window-title">OBJECTIFS DE VIE & FINANCIERS</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Projets financés</span>
+            </div>
+
+            {finances.goals?.length === 0 ? (
+              <div style={{ padding: '12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 11, background: 'rgba(0,0,0,0.2)', borderRadius: 6 }}>
+                Aucun objectif défini. Ajoutez vos grands projets de vie (Achat terrain, Voyage, Véhicule) ci-dessous.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {(finances.goals || []).map(g => {
+                  const pct = g.targetAmount > 0 ? Math.min(100, Math.round(((g.currentAmount || 0) / g.targetAmount) * 100)) : 0;
+                  return (
+                    <div key={g.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '10px 12px', borderRadius: 8, border: '1px solid var(--border-cyan-dim)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{g.title}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 11, fontWeight: 800, color: pct >= 100 ? 'var(--neon-green)' : 'var(--gold)' }}>
+                            {formatFCFA(g.currentAmount || 0)} / {formatFCFA(g.targetAmount)} ({pct}%)
+                          </span>
+                          <button onClick={() => handleDeleteGoal(g.id)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="hud-bar-container" style={{ height: 6 }}>
+                        <div className="hud-bar-fill gold" style={{ width: `${pct}%` }} />
+                      </div>
+                      {g.targetDate && (
+                        <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 4 }}>
+                          Date cible : {g.targetDate}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Formulaire ajout objectif */}
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-cyan-dim)', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <input 
+                type="text"
+                placeholder="Titre de l'objectif (ex: Titre foncier terrain)"
+                value={newGoalTitle}
+                onChange={(e) => setNewGoalTitle(e.target.value)}
+                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <input 
+                type="number"
+                placeholder="Montant cible FCFA"
+                value={newGoalTarget}
+                onChange={(e) => setNewGoalTarget(e.target.value)}
+                style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <input 
+                type="number"
+                placeholder="Déjà épargné"
+                value={newGoalCurrent}
+                onChange={(e) => setNewGoalCurrent(e.target.value)}
+                style={{ width: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
+              />
+              <button onClick={handleAddGoal} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
+                Créer Objectif
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= SUB-TAB 6: DÉCISIONS D'ACHAT ================= */}
       {activeSubTab === 'decisions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div className="system-window" style={{ padding: '16px', borderColor: 'var(--border-cyan)' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 4 }}>
-              « PUIS-JE ME LE PERMETTRE ? » (ANALYSE D'IMPACT IMMÉDIAT)
-            </span>
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--border-cyan)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <Scale size={16} color="var(--border-cyan)" />
+              <span className="system-window-title">ANALYSEUR « PUIS-JE ME LE PERMETTRE ? »</span>
+            </div>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Ce moteur teste l'impact d'une dépense sur votre trésorerie libre, votre fonds d'urgence et le reste à vivre sans modifier vos données réelles.
+              Évaluez l'impact neuro-financier d'un achat sur votre trésorerie réelle, votre fonds d'urgence et votre reste à vivre.
             </p>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
               <input 
                 type="number" 
-                placeholder="Montant du projet ou achat (FCFA)" 
+                placeholder="Montant envisagé en FCFA" 
                 value={decisionAmount} 
                 onChange={(e) => setDecisionAmount(e.target.value)} 
-                style={{ flex: 2, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '8px 10px', fontSize: 13 }} 
+                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '8px 10px', fontSize: 12 }} 
               />
               <select 
                 value={decisionType} 
                 onChange={(e) => setDecisionType(e.target.value)} 
-                style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '8px 10px', fontSize: 12 }}
+                style={{ width: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '8px 10px', fontSize: 12 }}
               >
-                <option value="ACHAT">Achat / Consommation</option>
+                <option value="ACHAT">Achat Plaisir</option>
                 <option value="INVESTISSEMENT">Investissement</option>
+                <option value="CHARGE">Charge Fixe</option>
               </select>
-              <button onClick={handleAnalyzeDecision} className="btn-monarch" style={{ padding: '8px 14px' }}>
+              <button onClick={handleAnalyzeDecision} className="btn-monarch" style={{ fontSize: 11, padding: '8px 16px' }}>
                 Analyser
               </button>
             </div>
 
             {decisionResult && (
-              <div style={{ background: 'rgba(0,0,0,0.4)', padding: '14px', borderRadius: 8, border: `1px solid ${decisionResult.badgeColor}` }}>
+              <div style={{ background: 'rgba(0,0,0,0.4)', border: `1px solid ${decisionResult.badgeColor}`, borderRadius: 8, padding: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <span style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>VERDICT DU SYSTÈME</span>
-                  <span style={{ fontSize: 11, fontWeight: 900, padding: '3px 8px', borderRadius: 12, background: 'rgba(0,0,0,0.6)', color: decisionResult.badgeColor, border: `1px solid ${decisionResult.badgeColor}` }}>
-                    {decisionResult.verdict.replace(/_/g, ' ')}
+                  <span style={{ fontSize: 11, fontWeight: 800, color: decisionResult.badgeColor }}>
+                    VERDICT : {decisionResult.verdict.replace(/_/g, ' ')}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                    Trésorerie restante : {formatFCFA(decisionResult.freeCashAfter)}
                   </span>
                 </div>
-                <p style={{ fontSize: 12, color: '#fff', lineHeight: 1.5, margin: '6px 0 8px' }}>
+                <div style={{ fontSize: 11, color: '#fff', lineHeight: 1.4 }}>
                   {decisionResult.explanation}
-                </p>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                  {decisionResult.consequences.map((c, i) => <div key={i}>• {c}</div>)}
                 </div>
+                {decisionResult.consequences?.length > 0 && (
+                  <ul style={{ margin: '8px 0 0 16px', padding: 0, fontSize: 10, color: 'var(--text-muted)' }}>
+                    {decisionResult.consequences.map((c, idx) => <li key={idx}>{c}</li>)}
+                  </ul>
+                )}
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* ================= SUB-TAB 6: PARAMÈTRES FOYER (COMPLET DE LIFEOSAPK) ================= */}
+      {/* ================= SUB-TAB 7: PARAMÈTRES FOYER & RÈGLES ================= */}
       {activeSubTab === 'settings' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Section 1: Notre Foyer */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span className="system-window-title">NOTRE FOYER</span>
-              <span className="rank-badge rank-B" style={{ fontSize: 9 }}>ADMINISTRATEUR</span>
+          {/* Sources de revenus déclarées */}
+          <div className="neuro-card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <span className="system-window-title">SOURCES DE REVENUS DU FOYER</span>
+              <span style={{ fontSize: 10, color: 'var(--text-muted)' }}>Déclarées</span>
             </div>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              Espace transparent du foyer. Rôles et membres avec accès ou visibilité.
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(finances.couple?.members || []).map(m => (
-                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: 6 }}>
-                  <div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{m.name}</span>
-                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{m.email} • {m.role}</div>
-                  </div>
-                  <span style={{ fontSize: 9, color: 'var(--neon-green)', fontWeight: 700 }}>ACTIF</span>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          {/* Section 2: Revenus Mensuels Déclarés */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>REVENUS MENSUELS DU FOYER</span>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              Sources attendues, distinctes des encaissements réels (salaire, business, etc.).
-            </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-              {(finances.incomeSources || []).map(inc => (
-                <div key={inc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: 6 }}>
+              {(finances.incomeSources || []).map(src => (
+                <div key={src.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 10px', borderRadius: 6 }}>
                   <div>
-                    <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{inc.label}</span>
-                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>Type : {inc.kind} • {inc.active ? 'Actif' : 'Inactif'}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{src.label}</div>
+                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{src.kind}</div>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--neon-green)', fontFamily: 'var(--font-hud)' }}>
-                    {formatFCFA(inc.monthlyAmount)}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-green)' }}>{formatFCFA(src.monthlyAmount)}/mois</span>
+                    <button onClick={() => handleDeleteIncomeSource(src.id)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
 
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', paddingTop: 8, borderTop: '1px solid var(--border-cyan-dim)' }}>
               <input 
                 type="text" 
-                placeholder="Libellé (ex: Salaire, E-commerce)" 
+                placeholder="Source (ex: Freelance, Dividendes)" 
                 value={newIncomeLabel} 
                 onChange={(e) => setNewIncomeLabel(e.target.value)} 
                 style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
@@ -1133,214 +1809,100 @@ export default function FinancesView({
                 style={{ width: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
               >
                 <option value="SALARY">Salaire</option>
-                <option value="BUSINESS">Activité</option>
+                <option value="BUSINESS">Business</option>
+                <option value="DIVIDEND">Dividendes</option>
+                <option value="RENT">Loyer perçu</option>
                 <option value="OTHER">Autre</option>
               </select>
               <input 
                 type="number" 
-                placeholder="Montant FCFA" 
+                placeholder="Montant mensuel" 
                 value={newIncomeAmount} 
                 onChange={(e) => setNewIncomeAmount(e.target.value)} 
                 style={{ flex: 1, minWidth: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
               />
               <button onClick={handleAddIncomeSource} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                Ajouter
+                Ajouter Source
               </button>
             </div>
           </div>
 
-          {/* Section 3: Personnes à charge */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>PERSONNES À CHARGE</span>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Membres du foyer sans accès à l'application mais pris en compte dans la transparence familiale.
-            </p>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-              {(finances.dependents || []).map(dep => (
-                <div key={dep.id} style={{ background: 'rgba(0,217,255,0.1)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: '#fff' }}>
-                  {dep.name} ({dep.relationship})
-                </div>
-              ))}
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <input 
-                type="text" 
-                placeholder="Nom de la personne" 
-                value={newDepName} 
-                onChange={(e) => setNewDepName(e.target.value)} 
-                style={{ flex: 2, minWidth: 140, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
-              />
-              <input 
-                type="text" 
-                placeholder="Lien familial (ex: Enfant, Parent)" 
-                value={newDepRelation} 
-                onChange={(e) => setNewDepRelation(e.target.value)} 
-                style={{ flex: 1, minWidth: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
-              />
-              <button onClick={handleAddDependent} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                Ajouter
-              </button>
-            </div>
-          </div>
-
-          {/* Section 4: Réglages financiers */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>RÉGLAGES FINANCIERS DU SYSTÈME</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {/* Réglages généraux du foyer */}
+          <div className="neuro-card" style={{ padding: '14px' }}>
+            <span className="system-window-title" style={{ display: 'block', marginBottom: 10 }}>RÉGLAGES & RÈGLES DE GESTION</span>
+            
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Fonds d'urgence (mois de dépenses essentielles) :</span>
+                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 4 }}>
+                  OBJECTIF FONDS D'URGENCE (EN MOIS DE DÉPENSES ESSENTIELLES) :
+                </label>
                 <select 
                   value={finances.settings?.emergencyFundMonths || 3} 
                   onChange={(e) => handleUpdateSettings({ emergencyFundMonths: Number(e.target.value) })}
-                  style={{ width: '100%', marginTop: 4, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
                 >
-                  <option value={1}>1 mois</option>
-                  <option value={3}>3 mois (Recommandé)</option>
-                  <option value={6}>6 mois</option>
-                  <option value={9}>9 mois</option>
-                  <option value={12}>12 mois</option>
+                  {[1, 2, 3, 4, 5, 6, 9, 12].map(m => (
+                    <option key={m} value={m}>{m} mois de sérénité</option>
+                  ))}
                 </select>
-                <div style={{ fontSize: 10, color: 'var(--border-cyan)', marginTop: 2 }}>
-                  Cible calculée : {formatFCFA(efStatus.target)}
-                </div>
               </div>
 
               <div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Marge de sécurité mensuelle non mobilisable :</span>
+                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 4 }}>
+                  MARGE DE SÉCURITÉ INVIOLABLE NON MOBILISABLE (FCFA) :
+                </label>
                 <input 
-                  type="number" 
-                  value={finances.settings?.safetyMargin || 20000} 
+                  type="number"
+                  value={finances.settings?.safetyMargin || 0}
                   onChange={(e) => handleUpdateSettings({ safetyMargin: Number(e.target.value) })}
-                  style={{ width: '100%', marginTop: 4, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }} 
+                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
                 />
               </div>
 
-              <div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Compte par défaut (pour saisie rapide) :</span>
-                <select 
-                  value={finances.settings?.defaultAccountId || 'acc_wave'} 
-                  onChange={(e) => handleUpdateSettings({ defaultAccountId: e.target.value })}
-                  style={{ width: '100%', marginTop: 4, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12 }}
-                >
-                  {(finances.accounts || []).map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Mode d'utilisation :</span>
-                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-                  <button 
-                    onClick={() => handleUpdateSettings({ mode: 'simple' })}
-                    style={{ flex: 1, padding: '6px', borderRadius: 6, fontSize: 11, fontWeight: 700, border: `1px solid ${finances.settings?.mode === 'simple' ? 'var(--border-cyan)' : 'var(--border-cyan-dim)'}`, background: finances.settings?.mode === 'simple' ? 'rgba(0,217,255,0.2)' : 'rgba(0,0,0,0.3)', color: '#fff' }}
-                  >
-                    Simple (Quotidien)
-                  </button>
-                  <button 
-                    onClick={() => handleUpdateSettings({ mode: 'analyse' })}
-                    style={{ flex: 1, padding: '6px', borderRadius: 6, fontSize: 11, fontWeight: 700, border: `1px solid ${finances.settings?.mode === 'analyse' ? 'var(--border-cyan)' : 'var(--border-cyan-dim)'}`, background: finances.settings?.mode === 'analyse' ? 'rgba(0,217,255,0.2)' : 'rgba(0,0,0,0.3)', color: '#fff' }}
-                  >
-                    Analyse (Patrimoine & BRVM)
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Section 5: Catégories personnalisées */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>CATÉGORIES PERSONNALISÉES</span>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Gestion des catégories, budgets mensuels et caractère essentiel pour le fonds d'urgence.
-            </p>
-            <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
-              {(finances.categories || []).map(cat => (
-                <div key={cat.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '6px 10px', borderRadius: 6, fontSize: 11 }}>
-                  <div>
-                    <span style={{ fontWeight: 700, color: '#fff' }}>{cat.name}</span>
-                    <span style={{ fontSize: 9, color: 'var(--text-dim)', marginLeft: 6 }}>({cat.kind})</span>
-                    {cat.essential && <span style={{ fontSize: 8, background: 'var(--border-cyan)', color: '#000', padding: '1px 4px', borderRadius: 4, marginLeft: 4, fontWeight: 900 }}>ESSENTIELLE</span>}
-                  </div>
-                  <div style={{ color: 'var(--text-muted)' }}>
-                    {cat.budgetMonthly ? formatFCFA(cat.budgetMonthly) : '—'}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              <input 
-                type="text" 
-                placeholder="Nom catégorie" 
-                value={newCatName} 
-                onChange={(e) => setNewCatName(e.target.value)} 
-                style={{ flex: 2, minWidth: 120, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }} 
-              />
-              <select 
-                value={newCatKind} 
-                onChange={(e) => setNewCatKind(e.target.value)} 
-                style={{ width: 90, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11 }}
-              >
-                <option value="EXPENSE">Dépense</option>
-                <option value="INCOME">Revenu</option>
-                <option value="DONATION">Don</option>
-                <option value="INVESTMENT">Invest.</option>
-              </select>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'var(--text-muted)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: 11, color: '#fff' }}>Mode Analyse Financière Avancée</span>
                 <input 
-                  type="checkbox" 
-                  checked={newCatEssential} 
-                  onChange={(e) => setNewCatEssential(e.target.checked)} 
+                  type="checkbox"
+                  checked={finances.settings?.modeAnalyse || false}
+                  onChange={(e) => handleUpdateSettings({ modeAnalyse: e.target.checked })}
+                  style={{ width: 16, height: 16 }}
                 />
-                Essentielle
-              </label>
-              <button onClick={handleAddCategory} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                Ajouter
-              </button>
+              </div>
             </div>
           </div>
 
-          {/* Section 6: Point à clarifier (3 330 000 FCFA de 2028) */}
-          <div className="system-window" style={{ padding: '14px', borderColor: 'var(--monarch-purple)' }}>
-            <span className="system-window-title" style={{ color: 'var(--monarch-purple)', display: 'block', marginBottom: 4 }}>
-              POINT STRUCTURANT : 3 330 000 FCFA EN 2028
-            </span>
+          {/* Clarification 2028 : 3 330 000 FCFA */}
+          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--gold)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <HelpCircle size={15} color="var(--gold)" />
+              <span className="system-window-title" style={{ color: 'var(--gold)' }}>CLARIFICATION STRUCTURANTE (2028 : 3 330 000 FCFA)</span>
+            </div>
             <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
-              {finances.clarification3m?.question || 'Que représentent les 3 330 000 FCFA de 2028 ?'}
+              {finances.clarification3m?.question || "Que représentent exactement les 3 330 000 FCFA à l'horizon 2028 ?"}
             </p>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input 
-                type="text" 
-                value={clarifAnswer} 
-                onChange={(e) => setClarifAnswer(e.target.value)} 
-                placeholder="Ex: Revenu annuel cible, Épargne patrimoniale" 
-                style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--monarch-purple-dim)', borderRadius: 6, color: '#fff', padding: '6px 10px', fontSize: 12 }} 
-              />
-              <button onClick={handleSaveClarification} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                Enregistrer
-              </button>
-            </div>
+            <textarea 
+              rows={3} 
+              value={clarifAnswer} 
+              onChange={(e) => setClarifAnswer(e.target.value)} 
+              placeholder="Ex : Capital d'amorçage pour l'acquisition de la parcelle, ou réserve stratégique..."
+              style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '8px', fontSize: 11, boxSizing: 'border-box' }}
+            />
+            <button onClick={handleSaveClarification} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px', marginTop: 6 }}>
+              Enregistrer la clarification
+            </button>
           </div>
 
-          {/* Section 7: Journal d'audit du foyer */}
-          <div className="system-window" style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <span className="system-window-title">JOURNAL D'AUDIT DU FOYER</span>
-              <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>100 dernières actions</span>
-            </div>
-            <div style={{ maxHeight: 200, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(finances.auditEvents || []).map(aud => (
-                <div key={aud.id} style={{ background: 'rgba(0,0,0,0.3)', padding: '6px 10px', borderRadius: 6, fontSize: 10 }}>
-                  <span style={{ color: 'var(--border-cyan)', fontWeight: 700 }}>{aud.actorName}</span>{' '}
-                  <span style={{ color: 'var(--text-muted)' }}>{aud.action}</span>{' '}
-                  <span style={{ color: '#fff', fontWeight: 600 }}>{aud.entity}</span>
-                  <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>
-                    {new Date(aud.createdAt).toLocaleString('fr-FR')}
-                  </div>
+          {/* Journal d'audit */}
+          <div className="neuro-card" style={{ padding: '14px' }}>
+            <span className="system-window-title" style={{ display: 'block', marginBottom: 8 }}>JOURNAL D'AUDIT DU FOYER</span>
+            <div style={{ maxHeight: 160, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 4 }}>
+              {(finances.auditEvents || []).slice(0, 50).map(evt => (
+                <div key={evt.id} style={{ fontSize: 10, color: 'var(--text-dim)', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: 3 }}>
+                  <strong style={{ color: 'var(--border-cyan)' }}>{evt.actorName}</strong> {evt.action} {evt.entity} ({new Date(evt.createdAt).toLocaleDateString('fr-FR')})
                 </div>
               ))}
             </div>
           </div>
-
         </div>
       )}
 

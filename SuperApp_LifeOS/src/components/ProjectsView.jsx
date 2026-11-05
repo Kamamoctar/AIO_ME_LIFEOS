@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { 
-  Target, AlertOctagon, Plus, Lock, Unlock, CheckCircle, 
-  Clock, Calendar, Search, Sparkles, ArrowRight, ShieldCheck, CheckSquare, Trash2
+  Target, AlertOctagon, Plus, Lock, Unlock, CheckCircle2, 
+  Clock, Calendar, Search, Sparkles, ArrowRight, ShieldCheck, 
+  Trash2, ChevronRight, Layers, DollarSign
 } from 'lucide-react';
 import { sound } from '../core/sound.js';
 import { ACTIONS } from '../data/actionsData.js';
@@ -12,7 +13,6 @@ export default function ProjectsView({
   onAddProject,
   onDeleteProject,
   businessProjects,
-  onToggleBusinessStep,
   ideasVault,
   onAddIdea,
   onDeleteIdea,
@@ -50,6 +50,7 @@ export default function ProjectsView({
     });
     setNewProjectName('');
     setWarningMessage('');
+    onAddXp(10, 'INT');
   };
 
   const handleActivateDungeon = (dungeon) => {
@@ -68,7 +69,7 @@ export default function ProjectsView({
       status: 'ACTIVE'
     });
     setActiveSubTab('mk3');
-    setWarningMessage('');
+    onAddXp(15, 'INT');
   };
 
   const handleAddIdea = () => {
@@ -89,6 +90,7 @@ export default function ProjectsView({
     });
     setNewIdeaTitle('');
     setNewIdeaNotes('');
+    alert('Idée mise en quarantaine 30 jours pour protéger votre focus !');
   };
 
   const handleAddActionToTrio = (action) => {
@@ -99,15 +101,15 @@ export default function ProjectsView({
       title: action.action,
       domain: action.domaine,
       status: 'TODO',
-      xp: action.xp || 1
+      xp: action.xp || 5
     };
     if (existing.length < 3) {
       existing.push(newHabit);
     } else {
-      existing[0] = newHabit; // replace first
+      existing[0] = newHabit;
     }
     onSetFocusTrio(existing);
-    alert(`« ${action.action} » a été ajouté à ton Trio de Focus Quotidien !`);
+    alert(`« ${action.action} » a été ajouté à votre Focus Trio du Jour !`);
   };
 
   const filteredActions = (ACTIONS || []).filter(a => {
@@ -117,16 +119,16 @@ export default function ProjectsView({
   });
 
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }} className="animate-float">
+    <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '12px' }} className="animate-float">
       
-      {/* Sub Tabs Navigation */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+      {/* Sub Tabs Pill Bar */}
+      <div className="pill-tabs-bar">
         {[
-          { id: 'mk3', label: `LES 3 PROJETS (${activeProjects.length}/3)` },
+          { id: 'mk3', label: `3 PROJETS (${activeProjects.length}/3)` },
           { id: 'donjons', label: '5 DONJONS BIZ' },
-          { id: 'idees', label: `BOÎTE À IDÉES (${ideasVault.length})` },
+          { id: 'idees', label: `QUARANTAINE IDÉES (${ideasVault.length})` },
           { id: 'recurrences', label: 'RÉCURRENCES' },
-          { id: 'actions', label: '141 ACTIONS' },
+          { id: 'actions', label: '141 ACTIONS ÉVOLUTION' },
         ].map(st => (
           <button
             key={st.id}
@@ -134,18 +136,7 @@ export default function ProjectsView({
               sound.playClick();
               setActiveSubTab(st.id);
             }}
-            style={{
-              padding: '6px 10px',
-              fontSize: 10,
-              fontFamily: 'var(--font-hud)',
-              fontWeight: 700,
-              borderRadius: 6,
-              border: `1px solid ${activeSubTab === st.id ? 'var(--border-cyan)' : 'var(--border-cyan-dim)'}`,
-              background: activeSubTab === st.id ? 'rgba(0,217,255,0.2)' : 'rgba(0,0,0,0.4)',
-              color: activeSubTab === st.id ? 'var(--border-cyan)' : 'var(--text-muted)',
-              cursor: 'pointer',
-              whiteSpace: 'nowrap'
-            }}
+            className={`pill-tab ${activeSubTab === st.id ? 'active' : ''}`}
           >
             {st.label}
           </button>
@@ -153,328 +144,251 @@ export default function ProjectsView({
       </div>
 
       {warningMessage && (
-        <div className="system-window" style={{ borderColor: 'var(--alert-red)', background: 'rgba(255,46,76,0.15)', padding: '10px 12px' }}>
+        <div className="neuro-card" style={{ borderColor: 'var(--alert-red)', background: 'rgba(239, 68, 68, 0.1)', padding: '10px 12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--alert-red)', fontWeight: 700, fontSize: 11 }}>
             <AlertOctagon size={16} /> {warningMessage}
           </div>
         </div>
       )}
 
-      {/* --- SUB TAB 1: LES 3 PROJETS STRICTS (Système MK) --- */}
+      {/* --- SOUS-ONGLET 1: LES 3 PROJETS STRICTS (Système MK) --- */}
       {activeSubTab === 'mk3' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="system-window" style={{ padding: '12px 14px', background: 'rgba(255,46,76,0.06)', borderColor: 'var(--alert-red-dim)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--alert-red)', fontSize: 11, fontWeight: 700 }}>
-              <AlertOctagon size={16} /> RÈGLE STRICTE R1 • FOCUS MAXIMUM
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="neuro-card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              <span className="system-window-title">RÈGLE STRICTE DES 3 PROJETS ACTIFS MAX</span>
+              <span style={{ fontSize: 11, fontWeight: 900, fontFamily: 'var(--font-hud)', color: activeProjects.length >= 3 ? 'var(--alert-red)' : 'var(--neon-green)' }}>
+                {activeProjects.length} / 3 SLOTS UTILISÉS
+              </span>
             </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              <strong>Zone interdite à un 4e projet.</strong> Aucun projet nouveau ne peut entrer tant que l'un des 3 slots n'est pas terminé ou archivé au bilan mensuel.
-            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+              Pour garantir la victoire, votre énergie mentale ne doit jamais être fragmentée sur plus de 3 fronts en même temps.
+            </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {activeProjects.map((p, idx) => (
-              <div key={p.id} className="system-window" style={{ padding: '14px', borderColor: 'var(--border-cyan)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                  <div>
-                    <span style={{ fontSize: 10, color: 'var(--gold)', fontFamily: 'var(--font-hud)', fontWeight: 700 }}>
-                      SLOT {idx + 1} / 3 • {p.category.toUpperCase()}
-                    </span>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: '#fff', marginTop: 2 }}>{p.name}</div>
-                  </div>
-                  <button
-                    onClick={() => {
-                      sound.playLevelUp();
-                      onAddXp(50, 'DSC');
-                      onDeleteProject(p.id);
-                    }}
-                    className="btn-monarch"
-                    style={{ padding: '4px 8px', fontSize: 10, background: 'rgba(0,255,136,0.15)', borderColor: 'var(--neon-green)', color: 'var(--neon-green)' }}
+          {/* Formulaire nouveau projet si slot disponible */}
+          {activeProjects.length < 3 && (
+            <div className="neuro-card" style={{ borderColor: 'var(--border-cyan-dim)' }}>
+              <span className="kpi-label" style={{ color: 'var(--border-cyan)', display: 'block', marginBottom: 8 }}>+ OUVRIR UN NOUVEAU CHANTIER</span>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                <input 
+                  type="text" 
+                  placeholder="Nom du projet concret (ex: Lancement Offre KDP)" 
+                  value={newProjectName} 
+                  onChange={(e) => setNewProjectName(e.target.value)} 
+                  style={{ flex: 2, minWidth: 160 }} 
+                />
+                <select 
+                  value={newProjectCategory} 
+                  onChange={(e) => setNewProjectCategory(e.target.value)} 
+                  style={{ flex: 1, minWidth: 100 }}
+                >
+                  <option value="Business">Business</option>
+                  <option value="Compétences">Compétences</option>
+                  <option value="Foyer">Foyer</option>
+                  <option value="Santé">Santé</option>
+                </select>
+                <button onClick={handleAddProject} className="btn-neuro btn-neuro-primary" style={{ padding: '6px 14px' }}>
+                  <Plus size={14} /> Activer
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Liste des projets actifs */}
+          {activeProjects.length === 0 ? (
+            <div className="neuro-card" style={{ textAlign: 'center', padding: '24px 16px' }}>
+              <Target size={32} color="var(--text-dim)" style={{ margin: '0 auto 8px' }} />
+              <p style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-white)' }}>Aucun projet actif pour le moment</p>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                Ouvrez un chantier ci-dessus ou activez un Donjon Business ci-dessous.
+              </p>
+            </div>
+          ) : (
+            activeProjects.map(p => (
+              <div key={p.id} className="neuro-card" style={{ borderColor: 'var(--border-subtle)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 4 }}>
+                  <span style={{ fontSize: 14, fontWeight: 900, fontFamily: 'var(--font-title)', color: 'var(--text-white)' }}>
+                    {p.name}
+                  </span>
+                  <button 
+                    onClick={() => onDeleteProject(p.id)}
+                    style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer', padding: 2 }}
+                    title="Archiver / Supprimer le projet"
                   >
-                    TERMINER (+50 XP)
+                    <Trash2 size={14} />
                   </button>
                 </div>
 
-                {/* Progress bar and slider */}
-                <div style={{ marginBottom: 8 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10, color: 'var(--text-muted)', marginBottom: 4 }}>
-                    <span>Progression</span>
-                    <span>{p.progress || 0}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={p.progress || 0}
-                    onChange={(e) => onSaveProject({ ...p, progress: parseInt(e.target.value, 10) })}
-                    style={{ width: '100%', accentColor: 'var(--border-cyan)' }}
-                  />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: 11, color: 'var(--text-dim)' }}>
+                  <span>Catégorie : <strong>{p.category}</strong></span>
+                  <span>•</span>
+                  <span>Avancement : <strong>{p.progress || 0}%</strong></span>
                 </div>
 
-                {/* Next immediate step */}
-                <div>
-                  <span style={{ fontSize: 10, color: 'var(--border-cyan)', fontFamily: 'var(--font-hud)' }}>
-                    PROCHAINE ÉTAPE IMMÉDIATE :
-                  </span>
-                  <input
-                    type="text"
-                    value={p.nextStep || ''}
-                    onChange={(e) => onSaveProject({ ...p, nextStep: e.target.value })}
-                    placeholder="Quelle est la prochaine action ?"
-                    style={{
-                      width: '100%',
-                      background: 'rgba(0,0,0,0.4)',
-                      border: '1px solid var(--border-cyan-dim)',
-                      borderRadius: 4,
-                      color: '#fff',
-                      fontSize: 12,
-                      padding: '5px 8px',
-                      marginTop: 3,
-                      outline: 'none'
-                    }}
-                  />
+                <div className="hud-bar-container" style={{ marginBottom: 10 }}>
+                  <div className="hud-bar-fill" style={{ width: `${p.progress || 0}%` }} />
+                </div>
+
+                <div style={{ background: 'var(--bg-inset)', padding: '8px 10px', borderRadius: 8, fontSize: 11 }}>
+                  <span style={{ color: 'var(--border-cyan)', fontWeight: 700 }}>Prochaine étape : </span>
+                  <span style={{ color: 'var(--text-main)' }}>{p.nextStep}</span>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Add project field if less than 3 */}
-          {activeProjects.length < 3 && (
-            <div className="system-window" style={{ padding: '12px 14px' }}>
-              <span style={{ fontSize: 11, fontFamily: 'var(--font-title)', color: 'var(--border-cyan)', display: 'block', marginBottom: 8 }}>
-                AJOUTER UN PROJET DANS LE SLOT LIBRE ({activeProjects.length}/3)
-              </span>
-              <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
-                <input
-                  type="text"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="Nom du projet..."
-                  style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 12, padding: '6px 8px', outline: 'none' }}
-                />
-                <select
-                  value={newProjectCategory}
-                  onChange={(e) => setNewProjectCategory(e.target.value)}
-                  style={{ background: 'rgba(0,0,0,0.6)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 11, padding: '0 8px', outline: 'none' }}
-                >
-                  <option value="Business">Business</option>
-                  <option value="Santé">Santé</option>
-                  <option value="Spirituel">Spirituel</option>
-                  <option value="Personnel">Personnel</option>
-                </select>
-              </div>
-              <button
-                onClick={handleAddProject}
-                className="btn-monarch"
-                style={{ width: '100%', padding: '8px', fontSize: 11 }}
-              >
-                + ACTIVER DANS LE SLOT LIBRE
-              </button>
-            </div>
+            ))
           )}
         </div>
       )}
 
-      {/* --- SUB TAB 2: LES 5 DONJONS BUSINESS --- */}
+      {/* --- SOUS-ONGLET 2: 5 DONJONS BUSINESS (Solo Leveling) --- */}
       {activeSubTab === 'donjons' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Les 5 projets business concrets pour passer de 203 000 FCFA à 733 333 FCFA / mois.
-          </div>
-
-          {(businessProjects || []).map(b => (
-            <div key={b.id} className="system-window" style={{ padding: '14px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--border-cyan)' }}>{b.name}</div>
-                  <div style={{ fontSize: 10, color: 'var(--gold)', fontFamily: 'var(--font-hud)', marginTop: 2 }}>
-                    💰 {b.potential} • Coût: {b.cost}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleActivateDungeon(b)}
-                  className="btn-monarch"
-                  style={{ padding: '4px 8px', fontSize: 10 }}
-                >
-                  🚀 Activer en Slot MK
-                </button>
-              </div>
-
-              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>{b.description}</p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, borderTop: '1px solid var(--border-cyan-dim)', paddingTop: 8 }}>
-                <span style={{ fontSize: 10, fontFamily: 'var(--font-hud)', color: 'var(--text-dim)' }}>
-                  ÉTAPES DU DONJON ({b.steps.filter(s => s.completed).length} / {b.steps.length}) :
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {(businessProjects || []).map(d => (
+            <div key={d.id} className="neuro-card">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <span style={{ fontSize: 13, fontWeight: 900, fontFamily: 'var(--font-title)', color: 'var(--text-white)' }}>
+                  {d.name}
                 </span>
-                {b.steps.map(step => (
-                  <div
-                    key={step.id}
-                    onClick={() => {
-                      sound.playClick();
-                      onToggleBusinessStep(b.id, step.id);
-                    }}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      fontSize: 11,
-                      color: step.completed ? 'var(--text-muted)' : '#fff',
-                      cursor: 'pointer'
-                    }}
-                  >
-                    {step.completed ? <CheckSquare size={14} color="var(--neon-green)" /> : <CheckSquare size={14} color="var(--text-dim)" />}
-                    <span style={{ textDecoration: step.completed ? 'line-through' : 'none' }}>{step.text}</span>
+                <span className={`rank-badge rank-${d.rank}`}>RANG {d.rank}</span>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+                {d.description}
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 10 }}>
+                {d.steps.map(s => (
+                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-main)' }}>
+                    <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--border-cyan)' }} />
+                    <span>{s.text}</span>
                   </div>
                 ))}
               </div>
+
+              <button 
+                onClick={() => handleActivateDungeon(d)}
+                className="btn-neuro btn-neuro-primary"
+                style={{ width: '100%', fontSize: 11 }}
+              >
+                Activer comme l'un de mes 3 Projets MK
+              </button>
             </div>
           ))}
         </div>
       )}
 
-      {/* --- SUB TAB 3: BOÎTE À IDÉES SOUS SÉQUESTRE (Système MK) --- */}
+      {/* --- SOUS-ONGLET 3: BOÎTE À IDÉES SOUS QUARANTAINE (30J) --- */}
       {activeSubTab === 'idees' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="system-window" style={{ padding: '12px', background: 'rgba(0,217,255,0.05)' }}>
-            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--border-cyan)', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Lock size={14} /> SÉQUESTRE ANTI-DISPERSION (30 JOURS)
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
-              Toute idée capturée reste sous séquestre jusqu'au premier jour du mois suivant pour éliminer l'impulsivité du "shiny object syndrome".
-            </div>
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="neuro-card">
+            <span className="system-window-title" style={{ display: 'block', marginBottom: 4 }}>RÈGLE DE QUARANTAINE DES 30 JOURS</span>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Toute nouvelle idée est capturée et verrouillée jusqu'au 1er du mois suivant. Si elle est toujours pertinente après 30 jours, elle peut être promue en projet.
+            </p>
 
-          <div className="system-window" style={{ padding: '12px' }}>
-            <input
-              type="text"
-              value={newIdeaTitle}
-              onChange={(e) => setNewIdeaTitle(e.target.value)}
-              placeholder="Titre de la nouvelle idée..."
-              style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 12, padding: '6px 8px', marginBottom: 6, outline: 'none' }}
-            />
-            <textarea
-              value={newIdeaNotes}
-              onChange={(e) => setNewIdeaNotes(e.target.value)}
-              placeholder="Notes ou détails supplémentaires..."
-              rows={2}
-              style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 12, padding: '6px 8px', marginBottom: 8, outline: 'none' }}
-            />
-            <button
-              onClick={handleAddIdea}
-              className="btn-monarch"
-              style={{ width: '100%', padding: '8px', fontSize: 11 }}
-            >
-              🔒 VERROUILLER SOUS SÉQUESTRE
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <input 
+                type="text" 
+                placeholder="Titre de la nouvelle opportunité / idée"
+                value={newIdeaTitle}
+                onChange={(e) => setNewIdeaTitle(e.target.value)}
+              />
+              <textarea 
+                placeholder="Détails, hypothèses ou notes rapides..."
+                value={newIdeaNotes}
+                onChange={(e) => setNewIdeaNotes(e.target.value)}
+                rows={2}
+              />
+              <button onClick={handleAddIdea} className="btn-neuro btn-neuro-primary">
+                <Lock size={14} /> Mettre en quarantaine 30j
+              </button>
+            </div>
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {(ideasVault || []).map(idea => (
-              <div key={idea.id} className="system-window" style={{ padding: '10px 12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{idea.title}</div>
-                    {idea.notes && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{idea.notes}</div>}
-                    <div style={{ fontSize: 10, color: 'var(--gold)', fontFamily: 'var(--font-hud)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Lock size={11} /> Verrouillée jusqu’au {idea.lockedUntil}
-                    </div>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <button
-                      onClick={() => onDeleteIdea(idea.id)}
-                      style={{ background: 'none', border: 'none', color: 'var(--alert-red)', cursor: 'pointer' }}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+              <div key={idea.id} className="neuro-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-white)' }}>{idea.title}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                    Capturé le {idea.capturedAt} • Verrouillé jusqu'au {idea.lockedUntil}
                   </div>
                 </div>
+                <button 
+                  onClick={() => onDeleteIdea(idea.id)}
+                  style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}
+                >
+                  <Trash2 size={14} />
+                </button>
               </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* --- SUB TAB 4: GESTION DES RÉCURRENCES ESPACÉES (Évolution v1.7) --- */}
+      {/* --- SOUS-ONGLET 4: RÉCURRENCES ESPACÉES (Évolution) --- */}
       {activeSubTab === 'recurrences' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-            Actions périodiques et rendez-vous espacés (coiffure, bilans, contrôles) qui ne bloquent pas le Trio de Focus.
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {(spacedRecurrences || []).map(r => (
-              <div key={r.id} className="system-window" style={{ padding: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{r.name}</span>
-                  <span style={{ fontSize: 10, color: 'var(--gold)', fontFamily: 'var(--font-hud)' }}>
-                    Tous les {r.intervalMonths} mois
-                  </span>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
-                  <span>Prochaine échéance : <strong>{r.nextDue}</strong></span>
-                  <button
-                    onClick={() => {
-                      sound.playQuestComplete();
-                      onAddXp(15, 'DSC');
-                      onCompleteRecurrence(r.id);
-                    }}
-                    className="btn-monarch"
-                    style={{ padding: '4px 8px', fontSize: 10 }}
-                  >
-                    ✓ Validé (+15 XP)
-                  </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {(spacedRecurrences || []).map(r => (
+            <div key={r.id} className="neuro-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-white)' }}>{r.name}</div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>
+                  Fréquence : tous les {r.intervalMonths} mois • Catégorie : {r.category}
                 </div>
               </div>
-            ))}
-          </div>
+              <button 
+                onClick={() => { sound.playQuestComplete(); onCompleteRecurrence(r.id); }}
+                className="btn-neuro btn-neuro-success"
+                style={{ fontSize: 10, padding: '6px 10px', minHeight: 30 }}
+              >
+                <CheckCircle2 size={12} /> Valider
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
-      {/* --- SUB TAB 5: LE CATALOGUE DES 141 ACTIONS (Évolution) --- */}
+      {/* --- SOUS-ONGLET 5: 141 ACTIONS (Catalogue Évolution) --- */}
       {activeSubTab === 'actions' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <div style={{ display: 'flex', gap: 6 }}>
-            <div style={{ flex: 1, position: 'relative' }}>
-              <input
-                type="text"
-                value={catalogSearch}
-                onChange={(e) => setCatalogSearch(e.target.value)}
-                placeholder="Rechercher parmi 141 actions..."
-                style={{ width: '100%', background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 11, padding: '6px 8px 6px 28px', outline: 'none' }}
-              />
-              <Search size={14} color="var(--text-dim)" style={{ position: 'absolute', top: 9, left: 8 }} />
-            </div>
-            <select
+            <input 
+              type="text" 
+              placeholder="Rechercher une action parmi les 141..."
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              style={{ flex: 1 }}
+            />
+            <select 
               value={selectedDomain}
               onChange={(e) => setSelectedDomain(e.target.value)}
-              style={{ background: 'rgba(0,0,0,0.7)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 10, padding: '0 6px', outline: 'none' }}
+              style={{ width: 120 }}
             >
               <option value="all">Tous domaines</option>
-              <option value="Personnel">Personnel / Santé</option>
-              <option value="Religieux">Spirituel</option>
-              <option value="Professionnel">Professionnel</option>
-              <option value="Financier">Financier</option>
-              <option value="relations">Relations / Cœur</option>
+              <option value="Corps">Corps</option>
+              <option value="Esprit">Esprit</option>
+              <option value="Finances">Finances</option>
+              <option value="Cœur">Cœur</option>
+              <option value="Âme">Âme</option>
             </select>
           </div>
 
-          <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>
-            {filteredActions.length} actions trouvées dans le catalogue
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '60vh', overflowY: 'auto' }}>
-            {filteredActions.slice(0, 30).map(act => (
-              <div key={act.code} style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ flex: 1, paddingRight: 8 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: '#fff' }}>{act.action}</div>
-                  <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{act.domaine} • {act.frequence}</div>
+          <div style={{ maxHeight: 380, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {filteredActions.map(act => (
+              <div key={act.code} className="neuro-card" style={{ padding: '8px 10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ minWidth: 0, flex: 1, paddingRight: 8 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-main)', lineHeight: 1.3 }}>{act.action}</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 2 }}>
+                    {act.domaine} • {act.sous_domaine} • +{act.xp} XP
+                  </div>
                 </div>
-                <button
+                <button 
                   onClick={() => handleAddActionToTrio(act)}
-                  className="btn-monarch"
-                  style={{ padding: '4px 6px', fontSize: 9, whiteSpace: 'nowrap' }}
+                  className="btn-neuro" 
+                  style={{ fontSize: 9, padding: '4px 8px', minHeight: 28 }}
+                  title="Ajouter au Focus Trio"
                 >
-                  + Trio Focus
+                  + Trio
                 </button>
               </div>
             ))}
@@ -485,4 +399,3 @@ export default function ProjectsView({
     </div>
   );
 }
-

@@ -21,7 +21,7 @@ import './core/theme.css';
 
 export default function App() {
   const [data, setData] = useState(() => loadStoredData());
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState('daily');
   const [isPanicOpen, setIsPanicOpen] = useState(false);
   const [levelUpInfo, setLevelUpInfo] = useState(null);
   const [selectedStatCode, setSelectedStatCode] = useState(null);
@@ -244,13 +244,39 @@ export default function App() {
     }));
   };
 
-  // Spiritual & Finances
+  // Spiritual & Finances & User Settings
   const handleUpdateSpiritual = (updatedSpiritual) => {
     setData(prev => ({ ...prev, spiritual: updatedSpiritual }));
   };
 
   const handleUpdateFinances = (updatedFinances) => {
     setData(prev => ({ ...prev, finances: updatedFinances }));
+  };
+
+  const handleUpdateUserSettings = (updates) => {
+    setData(prev => ({
+      ...prev,
+      userSettings: { ...(prev.userSettings || {}), ...updates }
+    }));
+  };
+
+  // Quick capture task / idea
+  const handleCaptureTask = (text) => {
+    if (!text || !text.trim()) return;
+    sound.playClick();
+    const newIdea = {
+      id: 'idea_' + Date.now(),
+      title: text.trim(),
+      category: 'Capture rapide',
+      dateAdded: new Date().toISOString().split('T')[0],
+      quarantineDaysLeft: 30,
+      status: 'EN_QUARANTAINE'
+    };
+    handleAddIdea(newIdea);
+  };
+
+  const handleAddBook = (newBook) => {
+    setData(prev => ({ ...prev, books: [...(prev.books || []), newBook] }));
   };
 
   // 30 Day Challenge
@@ -366,6 +392,8 @@ export default function App() {
             onUpdateDailyEntry={handleUpdateDailyEntry}
             focusTrio={data.focusTrio}
             onValidateHabit={handleValidateHabit}
+            userSettings={data.userSettings}
+            onAddCapturedTask={handleCaptureTask}
             onAddXp={addExperience}
             theme={currentTheme}
           />
@@ -395,6 +423,8 @@ export default function App() {
           <SpiritualView
             spiritual={data.spiritual}
             onUpdateSpiritual={handleUpdateSpiritual}
+            userSettings={data.userSettings}
+            onUpdateUserSettings={handleUpdateUserSettings}
             onAddXp={addExperience}
             theme={currentTheme}
           />
@@ -413,6 +443,8 @@ export default function App() {
           <SystemView
             player={data.player}
             setPlayer={(updater) => setData(prev => ({ ...prev, player: typeof updater === 'function' ? updater(prev.player) : updater }))}
+            userSettings={data.userSettings}
+            onUpdateUserSettings={handleUpdateUserSettings}
             titles={data.titles}
             rewards={data.rewards}
             books={data.books}
@@ -424,6 +456,7 @@ export default function App() {
             onToggleWorkoutSet={handleToggleWorkoutSet}
             onToggleHandstandLevel={handleToggleHandstandLevel}
             onClaimReward={handleClaimReward}
+            onAddBook={handleAddBook}
             allData={data}
             finances={data.finances}
             onUpdateFinances={handleUpdateFinances}
