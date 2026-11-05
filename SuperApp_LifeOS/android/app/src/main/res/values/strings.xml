@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AIO LifeOS</string>
+    <string name="title_activity_main">AIO LifeOS</string>
+    <string name="package_name">com.aiome.lifeos</string>
+    <string name="custom_url_scheme">com.aiome.lifeos</string>
+</resources>

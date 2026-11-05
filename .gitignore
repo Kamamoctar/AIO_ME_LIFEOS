@@ -1,0 +1,22 @@
+# Omettre formellement les 6 dossiers d'origine et leurs contenus
+EVOLUTION/
+LIFEosApk/
+napk/
+PersoNsPiritual_Life/
+Sololeveling/
+ZikrPartagerAkElle/
+
+# Ignorer les dépendances et caches de build de la SuperApp
+SuperApp_LifeOS/node_modules/
+SuperApp_LifeOS/dist/
+SuperApp_LifeOS/.gradle/
+SuperApp_LifeOS/android/.gradle/
+SuperApp_LifeOS/android/build/
+SuperApp_LifeOS/android/app/build/
+SuperApp_LifeOS/android/capacitor-cordova-android-plugins/build/
+SuperApp_LifeOS/android/local.properties
+
+# Logs et OS
+*.log
+.DS_Store
+Thumbs.db
