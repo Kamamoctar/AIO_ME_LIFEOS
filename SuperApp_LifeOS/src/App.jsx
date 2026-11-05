@@ -26,6 +26,29 @@ export default function App() {
   const [levelUpInfo, setLevelUpInfo] = useState(null);
   const [selectedStatCode, setSelectedStatCode] = useState(null);
 
+  const currentTheme = data.player?.theme || 'dark';
+
+  // Toggle Dark / Light Mode
+  const handleToggleTheme = () => {
+    sound.playClick();
+    const nextTheme = currentTheme === 'light' ? 'dark' : 'light';
+    setData(prev => ({
+      ...prev,
+      player: { ...prev.player, theme: nextTheme }
+    }));
+  };
+
+  // Sync theme with body and HTML classes
+  useEffect(() => {
+    if (currentTheme === 'light') {
+      document.body.classList.add('light-theme');
+      document.documentElement.classList.add('light-theme');
+    } else {
+      document.body.classList.remove('light-theme');
+      document.documentElement.classList.remove('light-theme');
+    }
+  }, [currentTheme]);
+
   // Auto-save whenever data changes
   useEffect(() => {
     saveStoredData(data);
@@ -308,16 +331,18 @@ export default function App() {
   const pendingQuestsCount = (data.dailyQuests || []).filter(q => !q.completed).length;
 
   return (
-    <div className="app-container">
+    <div className={`app-container ${currentTheme === 'light' ? 'light-theme' : ''}`}>
       {/* Universal Header */}
       <Header
         player={data.player}
         setPlayer={(updater) => setData(prev => ({ ...prev, player: typeof updater === 'function' ? updater(prev.player) : updater }))}
         onOpenPanic={() => setIsPanicOpen(true)}
+        theme={currentTheme}
+        onToggleTheme={handleToggleTheme}
       />
 
       {/* Main Screen Views */}
-      <main style={{ flex: 1, minHeight: 'calc(100vh - 140px)' }}>
+      <main style={{ flex: 1, minHeight: 'calc(100vh - 160px)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
         {activeTab === 'dashboard' && (
           <DashboardView
             player={data.player}
@@ -328,6 +353,7 @@ export default function App() {
             setActiveTab={setActiveTab}
             onSelectStat={(code) => setSelectedStatCode(code)}
             onOpenPanic={() => setIsPanicOpen(true)}
+            theme={currentTheme}
           />
         )}
 
@@ -341,6 +367,7 @@ export default function App() {
             focusTrio={data.focusTrio}
             onValidateHabit={handleValidateHabit}
             onAddXp={addExperience}
+            theme={currentTheme}
           />
         )}
 
@@ -360,6 +387,7 @@ export default function App() {
             focusTrio={data.focusTrio}
             onSetFocusTrio={(trio) => setData(prev => ({ ...prev, focusTrio: trio }))}
             onAddXp={addExperience}
+            theme={currentTheme}
           />
         )}
 
@@ -368,6 +396,7 @@ export default function App() {
             spiritual={data.spiritual}
             onUpdateSpiritual={handleUpdateSpiritual}
             onAddXp={addExperience}
+            theme={currentTheme}
           />
         )}
 
@@ -376,6 +405,7 @@ export default function App() {
             finances={data.finances}
             onUpdateFinances={handleUpdateFinances}
             onAddXp={addExperience}
+            theme={currentTheme}
           />
         )}
 
@@ -397,6 +427,8 @@ export default function App() {
             allData={data}
             onImportBackup={handleImportBackup}
             onAddXp={addExperience}
+            theme={currentTheme}
+            onToggleTheme={handleToggleTheme}
           />
         )}
       </main>
@@ -406,6 +438,7 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         pendingQuestsCount={pendingQuestsCount}
+        theme={currentTheme}
       />
 
       {/* Emergency Pureté SOS Modal */}
@@ -414,6 +447,7 @@ export default function App() {
         onClose={() => setIsPanicOpen(false)}
         onResisted={handleResistedUrge}
         currentStreak={data.player.streakNoFap}
+        theme={currentTheme}
       />
 
       {/* Level Up Banner Overlay */}
@@ -422,6 +456,7 @@ export default function App() {
           level={levelUpInfo.level}
           rank={levelUpInfo.rank}
           onClose={() => setLevelUpInfo(null)}
+          theme={currentTheme}
         />
       )}
 
@@ -430,9 +465,9 @@ export default function App() {
         <StatDetailModal
           stat={data.stats[selectedStatCode]}
           onClose={() => setSelectedStatCode(null)}
+          theme={currentTheme}
         />
       )}
     </div>
   );
 }
-

@@ -15,6 +15,7 @@ export const initialPlayer = {
   targetIncome: 733333,
   lastActiveDate: new Date().toISOString().split('T')[0],
   soundEnabled: true,
+  theme: 'dark',
   softRebootMode: false,
 };
 
