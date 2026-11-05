@@ -36,3 +36,4 @@ cd android
 ./gradlew assembleDebug
 ```
 L'APK debug sera généré dans `android/app/build/outputs/apk/debug/app-debug.apk`.
+
