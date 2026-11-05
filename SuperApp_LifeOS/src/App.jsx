@@ -425,6 +425,8 @@ export default function App() {
             onToggleHandstandLevel={handleToggleHandstandLevel}
             onClaimReward={handleClaimReward}
             allData={data}
+            finances={data.finances}
+            onUpdateFinances={handleUpdateFinances}
             onImportBackup={handleImportBackup}
             onAddXp={addExperience}
             theme={currentTheme}

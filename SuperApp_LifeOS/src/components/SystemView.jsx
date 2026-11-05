@@ -24,6 +24,8 @@ export default function SystemView({
   onUpdateBookProgress,
   onUpdateWeight,
   allData,
+  finances,
+  onUpdateFinances,
   onImportBackup,
   onAddXp
 }) {
@@ -110,6 +112,7 @@ export default function SystemView({
       <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
         {[
           { id: 'saturn', label: '📜 PACTE SATURNE' },
+          { id: 'foyer', label: '⚙️ PARAMÈTRES FOYER' },
           { id: 'workouts', label: '🏋️ CORPS DE THOR' },
           { id: 'bilans', label: '📊 BILANS & DÉFI 30J' },
           { id: 'titles', label: '🏆 TITRES & SHOP' },
@@ -511,6 +514,86 @@ export default function SystemView({
                 <Upload size={16} /> RESTAURER DEPUIS UN FICHIER JSON
                 <input type="file" accept=".json" onChange={handleFileImport} style={{ display: 'none' }} />
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* --- SUB TAB 7: PARAMÈTRES FOYER & FINANCEOS --- */}
+      {subTab === 'foyer' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* Notre foyer */}
+          <div className="system-window" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <span className="system-window-title">NOTRE FOYER • FINANCEOS</span>
+              <span className="rank-badge rank-B" style={{ fontSize: 9 }}>ADMINISTRATEUR</span>
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Espace transparent du foyer. Rôles et membres avec accès ou visibilité.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {((finances?.couple?.members) || [{ name: 'Administrateur du foyer', email: 'admin@foyer.local', role: 'ADMIN' }]).map((m, i) => (
+                <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: 6 }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{m.name}</span>
+                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{m.email} • {m.role}</div>
+                  </div>
+                  <span style={{ fontSize: 9, color: 'var(--neon-green)', fontWeight: 700 }}>ACTIF</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Revenus déclarés */}
+          <div className="system-window" style={{ padding: '14px' }}>
+            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>REVENUS MENSUELS DU FOYER</span>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Sources attendues, distinctes des encaissements réels (salaire, business, etc.).
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(finances?.incomeSources || []).map(inc => (
+                <div key={inc.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.3)', padding: '8px 12px', borderRadius: 6 }}>
+                  <div>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{inc.label}</span>
+                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>Type : {inc.kind} • {inc.active ? 'Actif' : 'Inactif'}</div>
+                  </div>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-green)', fontFamily: 'var(--font-hud)' }}>
+                    {inc.monthlyAmount?.toLocaleString()} FCFA
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Personnes à charge */}
+          <div className="system-window" style={{ padding: '14px' }}>
+            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>PERSONNES À CHARGE</span>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {(finances?.dependents || []).map(dep => (
+                <div key={dep.id} style={{ background: 'rgba(0,217,255,0.1)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, padding: '4px 10px', fontSize: 11, color: '#fff' }}>
+                  {dep.name} ({dep.relationship})
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Réglages fonds d'urgence & marge */}
+          <div className="system-window" style={{ padding: '14px' }}>
+            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>RÉGLAGES DU FONDS D'URGENCE & SÉCURITÉ</span>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div>• <strong>Fonds d'urgence :</strong> {finances?.settings?.emergencyFundMonths || 3} mois de dépenses essentielles.</div>
+              <div>• <strong>Marge de sécurité :</strong> {finances?.settings?.safetyMargin?.toLocaleString() || '20 000'} FCFA non mobilisables.</div>
+              <div>• <strong>Mode système :</strong> {finances?.settings?.mode?.toUpperCase() || 'ANALYSE'}.</div>
+            </div>
+          </div>
+
+          {/* Point structurant 3.33M */}
+          <div className="system-window" style={{ padding: '14px', borderColor: 'var(--monarch-purple)' }}>
+            <span className="system-window-title" style={{ color: 'var(--monarch-purple)', display: 'block', marginBottom: 4 }}>
+              CLARIFICATION DES 3 330 000 FCFA DE 2028
+            </span>
+            <div style={{ fontSize: 12, color: '#fff', marginTop: 4 }}>
+              Réponse enregistrée : <em>« {finances?.clarification3m?.answer || 'Revenu annuel / Épargne cible'} »</em>
             </div>
           </div>
         </div>

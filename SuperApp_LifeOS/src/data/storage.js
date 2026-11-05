@@ -56,6 +56,28 @@ export function loadStoredData() {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return createDefaultData();
     const data = JSON.parse(raw);
+    const defaults = createDefaultData();
+
+    // Migration / deep-merge safeguard for newly added LifeOS modules
+    if (!data.finances || !data.finances.accounts || !data.finances.settings) {
+      data.finances = {
+        ...defaults.finances,
+        ...(data.finances || {}),
+        settings: { ...(defaults.finances.settings || {}), ...((data.finances && data.finances.settings) || {}) },
+        accounts: (data.finances && data.finances.accounts && data.finances.accounts.length) ? data.finances.accounts : defaults.finances.accounts,
+        categories: (data.finances && data.finances.categories && data.finances.categories.length) ? data.finances.categories : defaults.finances.categories,
+        charges: (data.finances && data.finances.charges && data.finances.charges.length) ? data.finances.charges : defaults.finances.charges,
+        assets: (data.finances && data.finances.assets && data.finances.assets.length) ? data.finances.assets : defaults.finances.assets,
+        liabilities: (data.finances && data.finances.liabilities && data.finances.liabilities.length) ? data.finances.liabilities : defaults.finances.liabilities,
+        positions: (data.finances && data.finances.positions && data.finances.positions.length) ? data.finances.positions : defaults.finances.positions,
+        incomeSources: (data.finances && data.finances.incomeSources && data.finances.incomeSources.length) ? data.finances.incomeSources : defaults.finances.incomeSources,
+        dependents: (data.finances && data.finances.dependents && data.finances.dependents.length) ? data.finances.dependents : defaults.finances.dependents,
+        couple: (data.finances && data.finances.couple) ? data.finances.couple : defaults.finances.couple,
+        clarification3m: (data.finances && data.finances.clarification3m) ? data.finances.clarification3m : defaults.finances.clarification3m,
+        auditEvents: (data.finances && data.finances.auditEvents) ? data.finances.auditEvents : defaults.finances.auditEvents
+      };
+    }
+
     return checkDailyReset(data);
   } catch (err) {
     console.error('Failed to load storage, initializing defaults', err);

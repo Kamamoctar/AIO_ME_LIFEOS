@@ -431,22 +431,104 @@ export const initialSpacedRecurrences = [
   { id: 'rec_famille', name: 'Visite aux aînés et bienveillance familiale', intervalMonths: 1, lastDone: '2026-10-20', nextDue: '2026-11-20', category: 'Cœur/Relations' }
 ];
 
-// --- MODULE FINANCES & FOYER (FinanceOS) ---
+// --- MODULE FINANCES & FOYER (FinanceOS / LIFEos) ---
 export const initialFinances = {
   monthlySalary: 203000,
   targetIncome: 733333,
   emergencyFund: 150000,
+  settings: {
+    currency: 'XOF',
+    salaryMonthly: 203000,
+    emergencyFundMonths: 3,
+    safetyMargin: 20000,
+    mode: 'analyse', // 'simple' ou 'analyse'
+    defaultAccountId: 'acc_wave'
+  },
+  couple: {
+    name: 'Notre foyer',
+    role: 'ADMIN',
+    members: [
+      { id: 'm1', name: 'Administrateur', email: 'admin@foyer.local', role: 'ADMIN', status: 'ACTIVE' }
+    ],
+    invitations: []
+  },
+  incomeSources: [
+    { id: 'inc_salary', label: 'Salaire principal (Revenu fixe)', kind: 'SALARY', monthlyAmount: 203000, active: true },
+    { id: 'inc_biz', label: 'Activité & Projets Business', kind: 'BUSINESS', monthlyAmount: 50000, active: false }
+  ],
+  dependents: [
+    { id: 'dep_1', name: 'Famille / Personne à charge', relationship: 'Parent / Enfant', active: true, notes: 'Pris en compte dans la transparence' }
+  ],
+  accounts: [
+    { id: 'acc_wave', name: 'Wave Mobile Money', type: 'MOBILE_MONEY', initialBalance: 75000, institution: 'Wave', archived: false },
+    { id: 'acc_om', name: 'Orange Money / Moov', type: 'MOBILE_MONEY', initialBalance: 25000, institution: 'Orange Money', archived: false },
+    { id: 'acc_bank', name: 'Compte Bancaire (BOA / Atlantique)', type: 'BANK', initialBalance: 120000, institution: 'Banque', archived: false },
+    { id: 'acc_cash', name: 'Espèces / Portefeuille', type: 'CASH', initialBalance: 30000, institution: 'Espèces', archived: false },
+    { id: 'acc_savings', name: 'Épargne Sécurité & Urgence', type: 'SAVINGS', initialBalance: 150000, institution: 'Épargne', archived: false },
+    { id: 'acc_brvm', name: 'Compte Titres SGI / BRVM', type: 'BRVM', initialBalance: 0, institution: 'SGI', archived: false }
+  ],
+  categories: [
+    { id: 'cat_sal', name: 'Salaire', kind: 'INCOME', essential: false, budgetMonthly: null },
+    { id: 'cat_biz', name: 'Business', kind: 'INCOME', essential: false, budgetMonthly: null },
+    { id: 'cat_fact', name: 'Factures & Charges', kind: 'EXPENSE', essential: true, budgetMonthly: 65000 },
+    { id: 'cat_alim', name: 'Alimentation & Foyer', kind: 'EXPENSE', essential: true, budgetMonthly: 45000 },
+    { id: 'cat_log', name: 'Logement & Loyer', kind: 'EXPENSE', essential: true, budgetMonthly: 45000 },
+    { id: 'cat_sante', name: 'Santé & Hygiène', kind: 'EXPENSE', essential: true, budgetMonthly: 15000 },
+    { id: 'cat_depl', name: 'Déplacements & Carburant', kind: 'EXPENSE', essential: true, budgetMonthly: 16000 },
+    { id: 'cat_don', name: 'Dons & Solidarité', kind: 'DONATION', essential: false, budgetMonthly: 10000 },
+    { id: 'cat_form', name: 'Formation & Livres', kind: 'EXPENSE', essential: false, budgetMonthly: 10000 },
+    { id: 'cat_lois', name: 'Loisirs & Sorties', kind: 'EXPENSE', essential: false, budgetMonthly: 10000 },
+    { id: 'cat_proj', name: 'Projets d’Investissement', kind: 'INVESTMENT', essential: false, budgetMonthly: 40000 }
+  ],
+  charges: [
+    { id: 'ch_loyer', label: 'Loyer & charges locatives', amount: 45000, frequency: 'MONTHLY', nextDueDate: '2026-12-05', active: true, provision: false },
+    { id: 'ch_wifi', label: 'Internet Fibre / Connexion Wifi', amount: 15000, frequency: 'MONTHLY', nextDueDate: '2026-11-20', active: true, provision: false },
+    { id: 'ch_elec', label: 'Électricité & Eau', amount: 12000, frequency: 'MONTHLY', nextDueDate: '2026-11-25', active: true, provision: false }
+  ],
   envelopes: [
-    { id: 'env_vital', name: 'Obligatoire (Loyer, charges, alimentation)', allocated: 120000, spent: 45000 },
-    { id: 'env_projets', name: 'Investissement Business (Élevage, KDP)', allocated: 40000, spent: 10000 },
-    { id: 'env_formation', name: 'Développement Personnel & Livres', allocated: 10000, spent: 0 },
-    { id: 'env_securite', name: 'Épargne de Sécurité inviolable', allocated: 20000, spent: 0 },
-    { id: 'env_plaisir', name: 'Plaisir mérité & Foyer', allocated: 13000, spent: 3000 }
+    { id: 'env_vital', name: 'Obligatoire (Loyer, charges, alimentation)', group: 'OBLIGATOIRE', allocated: 120000, spent: 45000 },
+    { id: 'env_projets', name: 'Investissement Business (Élevage, KDP)', group: 'PROJETS', allocated: 40000, spent: 10000 },
+    { id: 'env_formation', name: 'Développement Personnel & Livres', group: 'PERSONNEL', allocated: 10000, spent: 0 },
+    { id: 'env_securite', name: 'Épargne de Sécurité inviolable', group: 'SECURITE', allocated: 20000, spent: 0 },
+    { id: 'env_plaisir', name: 'Plaisir mérité & Foyer', group: 'PERSONNEL', allocated: 13000, spent: 3000 }
+  ],
+  assets: [
+    { id: 'ast_1', name: 'Terrain résidentiel', type: 'LAND', value: 2500000, notes: 'Parcelle clôturée' },
+    { id: 'ast_2', name: 'Moto / Véhicule', type: 'MOTO', value: 450000, notes: 'Moyen de déplacement' },
+    { id: 'ast_3', name: 'Matériel informatique & outils', type: 'OTHER', value: 350000, notes: 'PC, matériel pro' }
+  ],
+  liabilities: [
+    { id: 'liab_1', name: 'Avance / Dette sans intérêt', amount: 50000, type: 'OTHER', notes: 'Remboursement flexible' }
+  ],
+  positions: [
+    { id: 'pos_1', company: 'SONATEL SN', ticker: 'SNTS', quantity: 25, avgBuyPrice: 16500, feesPaid: 2500, currentPrice: 18200, dividends: 35000, active: true, notes: 'Rendement dividende stable' },
+    { id: 'pos_2', company: 'ECOBANK TG', ticker: 'ETIT', quantity: 500, avgBuyPrice: 18, feesPaid: 500, currentPrice: 20, dividends: 2500, active: true, notes: 'Secteur bancaire régional' }
+  ],
+  copyTrading: [],
+  otherInvestments: [
+    { id: 'inv_1', name: 'Tontine / Épargne collective', type: 'TONTINE', initialCapital: 50000, contributions: 50000, currentValue: 100000, risk: 'FAIBLE', notes: 'Rotation mensuelle' }
+  ],
+  clarification3m: {
+    title: 'Point structurant : Les 3 330 000 FCFA de 2028',
+    question: 'Que représentent les 3 330 000 FCFA de 2028 ?',
+    answer: 'Un revenu annuel / épargne cible (à structurer dans la Vision)',
+    resolved: true
+  },
+  auditEvents: [
+    {
+      id: 'aud_init',
+      actorName: 'Administrateur',
+      action: 'a initialisé',
+      entity: 'le Système FinanceOS Foyer',
+      summary: JSON.stringify({ label: 'Démarrage de la superapp unifiée' }),
+      createdAt: '2026-11-05T08:00:00Z'
+    }
   ],
   transactions: [
-    { id: 'tx_1', date: '2026-11-01', label: 'Revenu mensuel déclaré', amount: 203000, type: 'INCOME', isShared: true },
-    { id: 'tx_2', date: '2026-11-02', label: 'Loyer & charges essentielles', amount: 45000, type: 'EXPENSE', envelopeId: 'env_vital', isShared: true },
-    { id: 'tx_3', date: '2026-11-03', label: 'Recherche & matériel KDP', amount: 10000, type: 'EXPENSE', envelopeId: 'env_projets', isShared: false }
+    { id: 'tx_1', date: '2026-11-01', label: 'Salaire principal du foyer', amount: 203000, fee: 0, type: 'INCOME', accountId: 'acc_bank', isShared: true },
+    { id: 'tx_2', date: '2026-11-02', label: 'Loyer mensuel du foyer', amount: 45000, fee: 0, type: 'EXPENSE', accountId: 'acc_wave', envelopeId: 'env_vital', isShared: true },
+    { id: 'tx_3', date: '2026-11-03', label: 'Matériel & recherche KDP', amount: 10000, fee: 0, type: 'EXPENSE', accountId: 'acc_wave', envelopeId: 'env_projets', isShared: false },
+    { id: 'tx_4', date: '2026-11-04', label: 'Virement de sécurité vers Compte Épargne', amount: 20000, fee: 100, type: 'TRANSFER', accountId: 'acc_bank', toAccountId: 'acc_savings', isShared: true }
   ]
 };
 
