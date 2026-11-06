@@ -32,6 +32,9 @@ import {
   Orbit,
   Crown,
   MoonStar,
+  CalendarClock,
+  LayoutGrid,
+  ClipboardCheck,
 } from "lucide-react";
 import {
   Sheet,
@@ -45,11 +48,14 @@ import { AuthUserControl } from "@/components/auth/user-control";
 
 const NAV: { id: ViewId; label: string; icon: typeof Sun; group: "main" | "more" }[] = [
   { id: "today", label: "Aujourd'hui", icon: Sun, group: "main" },
-  { id: "evolution", label: "Évolution", icon: Sprout, group: "main" },
-  { id: "mk", label: "Système MK", icon: Brain, group: "main" },
-  { id: "destiny", label: "Mon Astre", icon: Orbit, group: "main" },
-  { id: "monarch", label: "Royaume", icon: Crown, group: "main" },
-  { id: "spiritual", label: "Misbaha", icon: MoonStar, group: "main" },
+  { id: "plan", label: "Planifier", icon: CalendarClock, group: "main" },
+  { id: "domains", label: "Domaines", icon: LayoutGrid, group: "main" },
+  { id: "review", label: "Bilan", icon: ClipboardCheck, group: "main" },
+  { id: "evolution", label: "Évolution", icon: Sprout, group: "more" },
+  { id: "mk", label: "Système MK", icon: Brain, group: "more" },
+  { id: "destiny", label: "Mon Astre", icon: Orbit, group: "more" },
+  { id: "monarch", label: "Royaume", icon: Crown, group: "more" },
+  { id: "spiritual", label: "Misbaha", icon: MoonStar, group: "more" },
   { id: "cockpit", label: "Cockpit", icon: Gauge, group: "main" },
   { id: "vision", label: "Vision 2027–2035", icon: Telescope, group: "main" },
   { id: "goals", label: "Objectifs", icon: Target, group: "main" },
@@ -205,7 +211,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         className="lg:hidden fixed bottom-0 inset-x-0 z-50 border-t bg-background/95 backdrop-blur safe-bottom"
         aria-label="Navigation mobile"
       >
-        <div className="grid grid-cols-6">
+        <div className="grid grid-cols-5">
           {availableNav.filter((n) => PRIMARY_VIEWS.includes(n.id)).map((item) => {
             const Icon = item.icon;
             const active = view === item.id;

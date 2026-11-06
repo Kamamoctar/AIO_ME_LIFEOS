@@ -51,8 +51,9 @@ export function MonarchView() {
         <div className="mt-5"><div className="mb-1 flex justify-between text-xs text-slate-300"><span>Vers le niveau {level + 1}</span><span>{levelXp}/100 XP</span></div><div className="h-2 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-amber-400" style={{ width: `${levelXp}%` }} /></div></div>
       </header>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         <StatCard icon={<Flame className="size-5 text-orange-500" />} label="Pureté" value={`${data.monarch.streakNoFap} j`} detail={`Record ${data.monarch.recordNoFap}`} />
+        <StatCard icon={<Crown className="size-5 text-violet-500" />} label="Série de quêtes" value={`${data.monarch.streakQuests} j`} detail="jours complets" />
         <StatCard icon={<Trophy className="size-5 text-amber-500" />} label="Quêtes du jour" value={`${today.questDone.length}/${initialDailyQuests.length}`} detail={`${completedXp}/${totalXp} XP`} />
         <StatCard icon={<Shield className="size-5 text-sky-500" />} label="Victoires SOS" value={String(data.monarch.panicWins)} detail="résistances" />
         <button onClick={() => { setPanicStep(0); setPanicOpen(true); }} className="rounded-xl border border-red-500/40 bg-red-500/10 p-4 text-left transition hover:bg-red-500/20"><AlertTriangle className="size-5 text-red-500" /><p className="mt-2 text-sm font-bold text-red-600 dark:text-red-400">SOS Tentation</p><p className="text-xs text-muted-foreground">Protocole d’urgence</p></button>

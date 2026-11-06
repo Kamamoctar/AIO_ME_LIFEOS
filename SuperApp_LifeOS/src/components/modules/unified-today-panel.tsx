@@ -50,7 +50,7 @@ export function UnifiedTodayPanel() {
           {focus.map((action) => {
             if (!action) return null;
             const checked = today.evolutionDone.includes(action.code);
-            return <label key={action.code} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-card p-3"><Checkbox checked={checked} onCheckedChange={() => modules.toggleEvolutionComplete(action.code, action.xp, action.domaine)} />{checked ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" /> : null}<span className={`text-xs font-medium ${checked ? "line-through opacity-60" : ""}`}>{action.action}</span></label>;
+            return <label key={action.code} className="flex cursor-pointer items-center gap-3 rounded-xl border bg-card p-3"><Checkbox checked={checked} onCheckedChange={() => modules.toggleEvolutionComplete(action.code, action.xp, action.domaine, action.frequence)} />{checked ? <CheckCircle2 className="size-4 shrink-0 text-emerald-500" /> : null}<span className={`text-xs font-medium ${checked ? "line-through opacity-60" : ""}`}>{action.action}</span></label>;
           })}
         </div>
       )}

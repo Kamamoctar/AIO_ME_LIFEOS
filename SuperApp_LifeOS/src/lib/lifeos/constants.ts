@@ -12,6 +12,9 @@ export const CURRENCY = "FCFA";
 
 export const VIEW_IDS = [
   "today",
+  "plan",
+  "domains",
+  "review",
   "evolution",
   "mk",
   "destiny",
@@ -37,10 +40,9 @@ export type ViewId = (typeof VIEW_IDS)[number];
 
 export const PRIMARY_VIEWS: ViewId[] = [
   "today",
-  "evolution",
-  "mk",
-  "monarch",
-  "spiritual",
+  "plan",
+  "domains",
+  "review",
 ];
 
 export const ACCOUNT_TYPE_LABELS: Record<AccountType, string> = {

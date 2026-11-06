@@ -10,11 +10,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, Compass, HeartPulse, MoonStar, Search, ShieldAlert, Sparkles, Users } from "lucide-react";
+import { CalendarDays, Compass, HeartPulse, MoonStar, Plus, Search, ShieldAlert, Sparkles, Trash2, Users } from "lucide-react";
 
 export function DestinyView() {
-  const { data, setBirthDate } = useUnifiedModules();
+  const { data, setBirthDate, addDestinyRule, deleteDestinyRule } = useUnifiedModules();
   const [intent, setIntent] = useState("prendre une décision importante");
+  const [rule, setRule] = useState("");
   const profile = evaluateDestiny(new Date(), data.destiny.birthDate);
   const planned = useMemo(() => planDestinyDays(intent, data.destiny.birthDate, 45).slice(0, 8), [intent, data.destiny.birthDate]);
 
@@ -109,6 +110,7 @@ export function DestinyView() {
         <TabsContent value="life" className="grid gap-4 md:grid-cols-2">
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><HeartPulse className="size-4" /> Santé & alimentation</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p>{grid.alimentation.totheme}</p><p>{grid.alimentation.venSamDim}</p><div className="flex flex-wrap gap-2">{grid.alimentation.reglesPermanentes.map((item) => <Badge key={item} variant="secondary">{item}</Badge>)}</div></CardContent></Card>
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><Users className="size-4" /> Relations</CardTitle></CardHeader><CardContent className="space-y-3 text-sm"><p>{grid.relations.territoire}</p><p>{grid.relations.argent}</p><p className="text-muted-foreground">{grid.relations.amitiesAVerifier}</p></CardContent></Card>
+          <Card className="md:col-span-2"><CardHeader><CardTitle className="text-base">Mes règles permanentes</CardTitle></CardHeader><CardContent className="space-y-3"><div className="flex gap-2"><Input value={rule} onChange={(event) => setRule(event.target.value)} placeholder="Ex. Ne pas décider sous pression" /><Button onClick={() => { addDestinyRule(rule); setRule(""); }} disabled={!rule.trim()}><Plus className="mr-1 size-4" /> Ajouter</Button></div>{data.destiny.customRules.length === 0 ? <p className="text-sm text-muted-foreground">Ajoute ici les règles que ton futur toi ne doit pas renégocier.</p> : <div className="space-y-2">{data.destiny.customRules.map((item, index) => <div key={`${item}-${index}`} className="flex items-center gap-3 rounded-lg border p-3"><span className="flex-1 text-sm">{item}</span><button onClick={() => deleteDestinyRule(index)} className="rounded-md p-1 text-muted-foreground hover:bg-muted" aria-label={`Supprimer la règle ${index + 1}`}><Trash2 className="size-4" /></button></div>)}</div>}</CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>

@@ -1,5 +1,8 @@
 export const FEATURE_DEFINITIONS = [
   { id: "today", label: "Aujourd'hui" },
+  { id: "plan", label: "Planifier" },
+  { id: "domains", label: "Domaines" },
+  { id: "review", label: "Bilan" },
   { id: "cockpit", label: "Cockpit" },
   { id: "vision", label: "Vision" },
   { id: "goals", label: "Objectifs" },

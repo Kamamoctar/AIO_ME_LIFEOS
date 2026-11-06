@@ -27,6 +27,7 @@ import { DestinyView } from "@/components/modules/destiny-view";
 import { MonarchView } from "@/components/modules/monarch-view";
 import { SpiritualView } from "@/components/modules/spiritual-view";
 import { useUnifiedModules } from "@/lib/modules/store";
+import { DomainsHub, PlanningHub, ReviewHub } from "@/components/lifeos/life-hubs";
 
 export function LifeOSApp() {
   const { state, view, error, setView, setQuickAddOpen } = useLifeOS();
@@ -80,6 +81,25 @@ export function LifeOSApp() {
     if (params.get("quickadd")) setQuickAddOpen(true);
   }, [setView, setQuickAddOpen]);
 
+  useEffect(() => {
+    let disposed = false;
+    let removeListener: (() => Promise<void>) | undefined;
+    void Promise.all([import("@capacitor/core"), import("@capacitor/local-notifications")]).then(
+      async ([{ Capacitor }, { LocalNotifications }]) => {
+        if (disposed || !Capacitor.isNativePlatform()) return;
+        const handle = await LocalNotifications.addListener("localNotificationActionPerformed", (action) => {
+          const target = action.notification.extra?.lifeosView;
+          if (typeof target === "string") setView(target as never);
+        });
+        removeListener = () => handle.remove();
+      }
+    ).catch(() => undefined);
+    return () => {
+      disposed = true;
+      void removeListener?.();
+    };
+  }, [setView]);
+
   // Messages d'erreur globaux
   useEffect(() => {
     if (error) {
@@ -90,6 +110,9 @@ export function LifeOSApp() {
   // Rendu des vues uniquement si l'état est chargé
   const views: Record<string, React.ReactNode> = {
     today: <TodayView />,
+    plan: <PlanningHub />,
+    domains: <DomainsHub />,
+    review: <ReviewHub />,
     evolution: <EvolutionView />,
     mk: <MkView />,
     destiny: <DestinyView />,

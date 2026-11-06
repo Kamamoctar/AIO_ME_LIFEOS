@@ -1,14 +1,20 @@
 "use client";
 
 import { create } from "zustand";
-import { initialPlayer } from "@/data/monarch-seed";
+import { initialDailyQuests, initialPlayer } from "@/data/monarch-seed";
 import type {
   AppSettings,
   CureDay,
   MainPrayerName,
 } from "@/modules/spiritual/types";
-
-const STORAGE_KEY = "lifeos_unified_modules_v1";
+import { readKernelSection, writeKernelSection } from "@/lib/lifeos/kernel-storage";
+import {
+  appendLifeEvent,
+  monarchStatForDomain,
+  nextEvolutionDueDate,
+  type EvolutionSchedule,
+  type LifeEvent,
+} from "@/lib/modules/domain-core";
 
 export interface ModuleDailyEntry {
   date: string;
@@ -53,16 +59,20 @@ export interface SpiritualIntention {
 
 export interface UnifiedModulesState {
   version: 1;
+  events: LifeEvent[];
   daily: Record<string, ModuleDailyEntry>;
   evolution: {
     activeActionCodes: string[];
     xp: number;
     xpByDomain: Record<string, number>;
+    schedules: Record<string, EvolutionSchedule>;
   };
   mk: {
     ideas: MkIdea[];
     projects: MkProject[];
     saturnCommitments: string[];
+    weeklyReview: string;
+    monthlyReview: string;
   };
   destiny: {
     birthDate: string;
@@ -77,6 +87,7 @@ export interface UnifiedModulesState {
     recordNoFap: number;
     statXp: Record<string, number>;
     panicWins: number;
+    lastQuestStreakDate: string;
   };
   spiritual: {
     settings: AppSettings;
@@ -137,9 +148,16 @@ function createDailyEntry(date = localDateKey()): ModuleDailyEntry {
 export function createDefaultModulesState(): UnifiedModulesState {
   return {
     version: 1,
+    events: [],
     daily: {},
-    evolution: { activeActionCodes: [], xp: 0, xpByDomain: {} },
-    mk: { ideas: [], projects: [], saturnCommitments: Array(5).fill("") },
+    evolution: { activeActionCodes: [], xp: 0, xpByDomain: {}, schedules: {} },
+    mk: {
+      ideas: [],
+      projects: [],
+      saturnCommitments: Array(5).fill(""),
+      weeklyReview: "",
+      monthlyReview: "",
+    },
     destiny: { birthDate: "", customRules: [] },
     monarch: {
       codename: initialPlayer.codename,
@@ -150,6 +168,7 @@ export function createDefaultModulesState(): UnifiedModulesState {
       recordNoFap: 0,
       statXp: {},
       panicWins: 0,
+      lastQuestStreakDate: "",
     },
     spiritual: {
       settings: DEFAULT_SPIRITUAL_SETTINGS,
@@ -166,6 +185,7 @@ function mergeStoredState(value: Partial<UnifiedModulesState>): UnifiedModulesSt
   return {
     ...base,
     ...value,
+    events: value.events ?? base.events,
     daily: value.daily ?? base.daily,
     evolution: { ...base.evolution, ...value.evolution },
     mk: { ...base.mk, ...value.mk },
@@ -192,7 +212,7 @@ function mergeStoredState(value: Partial<UnifiedModulesState>): UnifiedModulesSt
 
 function persist(data: UnifiedModulesState) {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  writeKernelSection("modules", data);
 }
 
 function updateToday(
@@ -202,6 +222,34 @@ function updateToday(
   const key = localDateKey();
   const current = data.daily[key] ?? createDailyEntry(key);
   return { ...data, daily: { ...data.daily, [key]: update(current) } };
+}
+
+function isoDate(date: Date): string {
+  return localDateKey(date);
+}
+
+function eventId(source: string, date: string, subject: string): string {
+  return `${source}:${date}:${subject}`;
+}
+
+export function computeQuestStreak(
+  daily: Record<string, ModuleDailyEntry>,
+  requiredQuestCount = initialDailyQuests.length,
+  from = new Date()
+): number {
+  let streak = 0;
+  const cursor = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 12);
+  const current = daily[localDateKey(cursor)];
+  if (!current || current.questDone.length < requiredQuestCount) {
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  for (let day = 0; day < 3660; day += 1) {
+    const entry = daily[localDateKey(cursor)];
+    if (!entry || entry.questDone.length < requiredQuestCount) break;
+    streak += 1;
+    cursor.setDate(cursor.getDate() - 1);
+  }
+  return streak;
 }
 
 type OperationResult = { ok: true } | { ok: false; message: string };
@@ -218,13 +266,17 @@ interface UnifiedModulesStore {
   toggleRitual: (period: "morning" | "evening", index: number) => void;
   setJournal: (field: "journalHead" | "journalHeart" | "mindDump", value: string) => void;
   toggleEvolutionAction: (code: string) => OperationResult;
-  toggleEvolutionComplete: (code: string, xp: number, domain: string) => void;
+  toggleEvolutionComplete: (code: string, xp: number, domain: string, frequency: string) => void;
   addIdea: (title: string, excitement: string) => void;
   deleteIdea: (id: string) => void;
   launchIdea: (id: string) => OperationResult;
   addMkProject: (name: string) => OperationResult;
   updateMkProject: (id: string, patch: Partial<MkProject>) => void;
+  setSaturnCommitment: (index: number, value: string) => void;
+  setMkReview: (period: "weekly" | "monthly", value: string) => void;
   setBirthDate: (birthDate: string) => void;
+  addDestinyRule: (rule: string) => void;
+  deleteDestinyRule: (index: number) => void;
   toggleQuest: (id: string, xp: number, stat: string) => void;
   resistTemptation: () => void;
   declareRelapse: () => void;
@@ -233,6 +285,7 @@ interface UnifiedModulesStore {
   togglePrayer: (prayer: MainPrayerName) => void;
   addIntention: (zikrId: string, text: string) => void;
   updateSpiritualSettings: (patch: Partial<AppSettings>) => void;
+  completeCureDay: (zikrId: string) => void;
 }
 
 export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
@@ -248,10 +301,18 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
     hydrate: () => {
       if (typeof window === "undefined" || get().hydrated) return;
       try {
-        const raw = window.localStorage.getItem(STORAGE_KEY);
-        const data = raw
-          ? mergeStoredState(JSON.parse(raw) as Partial<UnifiedModulesState>)
+        const stored = readKernelSection<Partial<UnifiedModulesState>>("modules");
+        const merged = stored
+          ? mergeStoredState(stored)
           : createDefaultModulesState();
+        const data = {
+          ...merged,
+          monarch: {
+            ...merged.monarch,
+            streakQuests: computeQuestStreak(merged.daily),
+          },
+        };
+        persist(data);
         set({ data, hydrated: true });
       } catch {
         set({ data: createDefaultModulesState(), hydrated: true });
@@ -301,11 +362,14 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
       }));
       return { ok: true };
     },
-    toggleEvolutionComplete: (code, xp, domain) =>
+    toggleEvolutionComplete: (code, xp, domain, frequency) =>
       commit((data) => {
-        const today = data.daily[localDateKey()] ?? createDailyEntry();
+        const dateKey = localDateKey();
+        const today = data.daily[dateKey] ?? createDailyEntry();
         const completed = today.evolutionDone.includes(code);
         const delta = completed ? -xp : xp;
+        const stat = monarchStatForDomain(domain);
+        const id = eventId("evolution", dateKey, code);
         const next = updateToday(data, (entry) => ({
           ...entry,
           evolutionDone: completed
@@ -321,7 +385,35 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
               ...next.evolution.xpByDomain,
               [domain]: Math.max(0, (next.evolution.xpByDomain[domain] ?? 0) + delta),
             },
+            schedules: completed
+              ? Object.fromEntries(Object.entries(next.evolution.schedules).filter(([key]) => key !== code))
+              : {
+                  ...next.evolution.schedules,
+                  [code]: {
+                    lastCompletedAt: new Date().toISOString(),
+                    nextDueDate: isoDate(nextEvolutionDueDate(frequency)),
+                  },
+                },
           },
+          monarch: {
+            ...next.monarch,
+            xpTotal: Math.max(0, next.monarch.xpTotal + delta),
+            statXp: {
+              ...next.monarch.statXp,
+              [stat]: Math.max(0, (next.monarch.statXp[stat] ?? 0) + delta),
+            },
+          },
+          events: completed
+            ? next.events.filter((event) => event.id !== id)
+            : appendLifeEvent(next.events, {
+                id,
+                date: dateKey,
+                createdAt: new Date().toISOString(),
+                source: "evolution",
+                type: "completion",
+                title: `${code} · ${domain}`,
+                xp,
+              }),
         };
       }),
     addIdea: (title, excitement) => commit((data) => {
@@ -363,6 +455,15 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
             createdAt: new Date().toISOString(),
           }, ...current.mk.projects],
         },
+        events: appendLifeEvent(current.events, {
+          id: eventId("mk", localDateKey(), `idea:${id}`),
+          date: localDateKey(),
+          createdAt: new Date().toISOString(),
+          source: "mk",
+          type: "project",
+          title: `Projet lancé · ${idea.title}`,
+          xp: 0,
+        }),
       }));
       return { ok: true };
     },
@@ -383,21 +484,84 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
             createdAt: new Date().toISOString(),
           }, ...data.mk.projects],
         },
+        events: appendLifeEvent(data.events, {
+          id: eventId("mk", localDateKey(), `project:${Date.now()}`),
+          date: localDateKey(),
+          createdAt: new Date().toISOString(),
+          source: "mk",
+          type: "project",
+          title: `Projet créé · ${name.trim()}`,
+          xp: 0,
+        }),
       }));
       return { ok: true };
     },
-    updateMkProject: (id, patch) => commit((data) => ({
+    updateMkProject: (id, patch) => commit((data) => {
+      const project = data.mk.projects.find((item) => item.id === id);
+      const completedNow = patch.state === "COMPLETED" && project?.state !== "COMPLETED";
+      return {
+        ...data,
+        mk: {
+          ...data.mk,
+          projects: data.mk.projects.map((item) => item.id === id ? { ...item, ...patch } : item),
+        },
+        monarch: completedNow
+          ? {
+              ...data.monarch,
+              xpTotal: data.monarch.xpTotal + 25,
+              statXp: { ...data.monarch.statXp, WLT: (data.monarch.statXp.WLT ?? 0) + 25 },
+            }
+          : data.monarch,
+        events: completedNow && project
+          ? appendLifeEvent(data.events, {
+              id: eventId("mk", localDateKey(), `completed:${id}`),
+              date: localDateKey(),
+              createdAt: new Date().toISOString(),
+              source: "mk",
+              type: "completion",
+              title: `Projet terminé · ${project.name}`,
+              xp: 25,
+            })
+          : data.events,
+      };
+    }),
+    setSaturnCommitment: (index, value) => commit((data) => ({
       ...data,
       mk: {
         ...data.mk,
-        projects: data.mk.projects.map((project) => project.id === id ? { ...project, ...patch } : project),
+        saturnCommitments: data.mk.saturnCommitments.map((item, position) =>
+          position === index ? value : item
+        ),
+      },
+    })),
+    setMkReview: (period, value) => commit((data) => ({
+      ...data,
+      mk: {
+        ...data.mk,
+        [period === "weekly" ? "weeklyReview" : "monthlyReview"]: value,
       },
     })),
     setBirthDate: (birthDate) => commit((data) => ({ ...data, destiny: { ...data.destiny, birthDate } })),
+    addDestinyRule: (rule) => commit((data) => ({
+      ...data,
+      destiny: {
+        ...data.destiny,
+        customRules: rule.trim() ? [...data.destiny.customRules, rule.trim()] : data.destiny.customRules,
+      },
+    })),
+    deleteDestinyRule: (index) => commit((data) => ({
+      ...data,
+      destiny: {
+        ...data.destiny,
+        customRules: data.destiny.customRules.filter((_, position) => position !== index),
+      },
+    })),
     toggleQuest: (id, xp, stat) => commit((data) => {
+      const dateKey = localDateKey();
       const today = data.daily[localDateKey()] ?? createDailyEntry();
       const completed = today.questDone.includes(id);
       const delta = completed ? -xp : xp;
+      const idForEvent = eventId("monarch", dateKey, id);
       const next = updateToday(data, (entry) => ({
         ...entry,
         questDone: completed ? entry.questDone.filter((item) => item !== id) : [...entry.questDone, id],
@@ -408,7 +572,20 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
           ...next.monarch,
           xpTotal: Math.max(0, next.monarch.xpTotal + delta),
           statXp: { ...next.monarch.statXp, [stat]: Math.max(0, (next.monarch.statXp[stat] ?? 0) + delta) },
+          streakQuests: computeQuestStreak(next.daily),
+          lastQuestStreakDate: dateKey,
         },
+        events: completed
+          ? next.events.filter((event) => event.id !== idForEvent)
+          : appendLifeEvent(next.events, {
+              id: idForEvent,
+              date: dateKey,
+              createdAt: new Date().toISOString(),
+              source: "monarch",
+              type: "completion",
+              title: id,
+              xp,
+            }),
       };
     }),
     resistTemptation: () => commit((data) => ({
@@ -460,12 +637,41 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
         },
       };
     }),
-    togglePrayer: (prayer) => commit((data) => updateToday(data, (entry) => ({
-      ...entry,
-      prayersDone: entry.prayersDone.includes(prayer)
-        ? entry.prayersDone.filter((item) => item !== prayer)
-        : [...entry.prayersDone, prayer],
-    }))),
+    togglePrayer: (prayer) => commit((data) => {
+      const dateKey = localDateKey();
+      const current = data.daily[dateKey] ?? createDailyEntry(dateKey);
+      const completed = current.prayersDone.includes(prayer);
+      const delta = completed ? -1 : 1;
+      const id = eventId("spiritual", dateKey, prayer);
+      const next = updateToday(data, (entry) => ({
+        ...entry,
+        prayersDone: completed
+          ? entry.prayersDone.filter((item) => item !== prayer)
+          : [...entry.prayersDone, prayer],
+      }));
+      return {
+        ...next,
+        monarch: {
+          ...next.monarch,
+          xpTotal: Math.max(0, next.monarch.xpTotal + delta),
+          statXp: {
+            ...next.monarch.statXp,
+            SPI: Math.max(0, (next.monarch.statXp.SPI ?? 0) + delta),
+          },
+        },
+        events: completed
+          ? next.events.filter((event) => event.id !== id)
+          : appendLifeEvent(next.events, {
+              id,
+              date: dateKey,
+              createdAt: new Date().toISOString(),
+              source: "spiritual",
+              type: "completion",
+              title: `Prière · ${prayer}`,
+              xp: 1,
+            }),
+      };
+    }),
     addIntention: (zikrId, text) => commit((data) => ({
       ...data,
       spiritual: {
@@ -483,6 +689,37 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
       ...data,
       spiritual: { ...data.spiritual, settings: { ...data.spiritual.settings, ...patch } },
     })),
+    completeCureDay: (zikrId) => commit((data) => {
+      const dateKey = localDateKey();
+      if (data.spiritual.cureDays.some((day) => day.zikrId === zikrId && day.dateKey === dateKey)) {
+        return data;
+      }
+      const dayNumber = data.spiritual.cureDays.filter(
+        (day) => day.zikrId === zikrId && day.status === "fait"
+      ).length + 1;
+      return {
+        ...data,
+        spiritual: {
+          ...data.spiritual,
+          cureDays: [{
+            id: `cure:${zikrId}:${dateKey}`,
+            zikrId,
+            dayNumber,
+            dateKey,
+            status: "fait",
+          }, ...data.spiritual.cureDays],
+        },
+        events: appendLifeEvent(data.events, {
+          id: eventId("spiritual", dateKey, `cure:${zikrId}`),
+          date: dateKey,
+          createdAt: new Date().toISOString(),
+          source: "spiritual",
+          type: "milestone",
+          title: `Cure · jour ${dayNumber}`,
+          xp: 0,
+        }),
+      };
+    }),
   };
 });
 

@@ -161,6 +161,18 @@ export function MkView() {
               </Card>
             ))}
           </div>
+          <Card>
+            <CardHeader><CardTitle className="text-base">Contrat de focus · 5 engagements</CardTitle></CardHeader>
+            <CardContent className="grid gap-2 md:grid-cols-2">
+              {data.mk.saturnCommitments.map((commitment, index) => (
+                <Input key={index} value={commitment} onChange={(event) => store.setSaturnCommitment(index, event.target.value)} placeholder={`Engagement ${index + 1}`} />
+              ))}
+            </CardContent>
+          </Card>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card><CardHeader><CardTitle className="text-base">Revue hebdomadaire</CardTitle></CardHeader><CardContent><Textarea value={data.mk.weeklyReview} onChange={(event) => store.setMkReview("weekly", event.target.value)} placeholder="Ce qui a avancé, ce qui bloque, le focus de la semaine…" rows={7} /></CardContent></Card>
+            <Card><CardHeader><CardTitle className="text-base">Revue mensuelle</CardTitle></CardHeader><CardContent><Textarea value={data.mk.monthlyReview} onChange={(event) => store.setMkReview("monthly", event.target.value)} placeholder="Résultats, leçons, projets à arrêter ou poursuivre…" rows={7} /></CardContent></Card>
+          </div>
           <Card><CardContent className="flex items-center gap-4 pt-5"><CalendarCheck className="size-8 text-primary" /><div><p className="font-semibold">Bilan du jour</p><p className="text-sm text-muted-foreground">{today.blocks.filter(Boolean).length}/4 blocs · {today.morningRituals.filter(Boolean).length + today.eveningRituals.filter(Boolean).length}/8 rituels · énergie {today.energy}/10.</p></div></CardContent></Card>
         </TabsContent>
       </Tabs>

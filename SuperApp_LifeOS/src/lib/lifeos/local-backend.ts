@@ -33,8 +33,7 @@ import type {
 } from "./types";
 import { LIFE_AREAS } from "./constants";
 import { isOfflineLifeOSState } from "./backup";
-
-const STORAGE_KEY = "financeos_local_state_v1";
+import { readKernelSection, writeKernelSection } from "./kernel-storage";
 
 function generateId(prefix = "id"): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
@@ -164,6 +163,9 @@ export function createInitialOfflineState(): LifeOSState {
       currentMemberId: "local-member-1",
       permissions: {
         today: "EDIT",
+        plan: "EDIT",
+        domains: "EDIT",
+        review: "EDIT",
         cockpit: "EDIT",
         vision: "EDIT",
         goals: "EDIT",
@@ -190,6 +192,9 @@ export function createInitialOfflineState(): LifeOSState {
           status: "ACTIVE",
           permissions: {
             today: "EDIT",
+            plan: "EDIT",
+            domains: "EDIT",
+            review: "EDIT",
             cockpit: "EDIT",
             vision: "EDIT",
             goals: "EDIT",
@@ -220,9 +225,8 @@ export function getLocalState(): LifeOSState {
   }
 
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as LifeOSState;
+    const parsed = readKernelSection<LifeOSState>("finance");
+    if (parsed) {
       parsed.today = new Date().toISOString();
       return parsed;
     }
@@ -238,7 +242,7 @@ export function getLocalState(): LifeOSState {
 export function saveLocalState(state: LifeOSState): void {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    writeKernelSection("finance", state);
   } catch (err) {
     console.error("[offline-storage] Erreur lors de la sauvegarde locale", err);
   }

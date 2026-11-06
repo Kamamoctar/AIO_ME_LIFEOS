@@ -11,6 +11,10 @@ const config: CapacitorConfig = {
     SystemBars: {
       insetsHandling: 'native',
       initialViewportFitValueHint: 'cover'
+    },
+    LocalNotifications: {
+      iconColor: '#7c3aed',
+      presentationOptions: ['badge', 'sound', 'banner', 'list']
     }
   }
 };

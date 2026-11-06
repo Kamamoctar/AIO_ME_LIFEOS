@@ -66,6 +66,8 @@ export function EvolutionView() {
               {active.map((action) => {
                 if (!action) return null;
                 const done = today.evolutionDone.includes(action.code);
+                const schedule = data.evolution.schedules[action.code];
+                const overdue = schedule && schedule.nextDueDate < today.date;
                 return (
                   <div key={action.code} className="rounded-xl border bg-background p-4">
                     <div className="flex items-start justify-between gap-2">
@@ -74,11 +76,12 @@ export function EvolutionView() {
                     </div>
                     <h2 className="mt-3 text-sm font-semibold leading-5">{action.action}</h2>
                     <p className="mt-2 text-xs text-muted-foreground">Petit pas : {action.minimum}</p>
+                    {schedule && <p className={`mt-2 text-[11px] ${overdue ? "font-semibold text-destructive" : "text-muted-foreground"}`}>Prochaine échéance : {new Date(`${schedule.nextDueDate}T12:00:00`).toLocaleDateString("fr-FR")}{overdue ? " · en retard" : ""}</p>}
                     <Button
                       className="mt-4 w-full"
                       size="sm"
                       variant={done ? "secondary" : "default"}
-                      onClick={() => toggleEvolutionComplete(action.code, action.xp, action.domaine)}
+                      onClick={() => toggleEvolutionComplete(action.code, action.xp, action.domaine, action.frequence)}
                     >
                       <Check className="mr-1.5 size-4" /> {done ? "Accompli aujourd’hui" : `Valider · +${action.xp} XP`}
                     </Button>

@@ -7,6 +7,7 @@ import { calculatePrayerDay } from "@/modules/spiritual/prayers";
 import { formatWindow, PRAYER_LABELS, resolveProgram } from "@/modules/spiritual/temporal";
 import type { MainPrayerName, ProgramItem, Zikr, ZikrData } from "@/modules/spiritual/types";
 import { getTodayEntry, localDateKey, useUnifiedModules } from "@/lib/modules/store";
+import { disableLifeOSReminders, scheduleLifeOSReminders } from "@/lib/native/reminders";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -29,6 +30,7 @@ export function SpiritualView() {
   const [manualLat, setManualLat] = useState(String(data.spiritual.settings.coordinates.latitude));
   const [manualLon, setManualLon] = useState(String(data.spiritual.settings.coordinates.longitude));
   const [locationMessage, setLocationMessage] = useState("");
+  const [reminderMessage, setReminderMessage] = useState("");
   const today = getTodayEntry(data);
   const dayKey = localDateKey(now);
   const prayerDay = useMemo(() => {
@@ -72,6 +74,27 @@ export function SpiritualView() {
       () => setLocationMessage("Position refusée. Lomé ou les coordonnées manuelles restent disponibles."),
       { enableHighAccuracy: false, timeout: 10_000 }
     );
+  };
+
+  const enableReminders = async () => {
+    setReminderMessage("Programmation des rappels…");
+    try {
+      const result = await scheduleLifeOSReminders(data.spiritual.settings);
+      if (result.ok) store.updateSpiritualSettings({ notificationsEnabled: true });
+      setReminderMessage(result.message);
+    } catch {
+      setReminderMessage("Impossible de programmer les rappels sur cet appareil.");
+    }
+  };
+
+  const disableReminders = async () => {
+    try {
+      const result = await disableLifeOSReminders();
+      store.updateSpiritualSettings({ notificationsEnabled: false });
+      setReminderMessage(result.message);
+    } catch {
+      setReminderMessage("Impossible de désactiver les rappels Android.");
+    }
   };
 
   return (
@@ -140,22 +163,23 @@ export function SpiritualView() {
         </TabsContent>
 
         <TabsContent value="progress" className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <Metric label="Récitations à vie" value={Object.values(data.spiritual.lifetimeCounts).reduce((sum, value) => sum + value, 0).toLocaleString("fr-FR")} />
             <Metric label="Zikrs pratiqués" value={String(Object.values(data.spiritual.lifetimeCounts).filter((value) => value > 0).length)} />
             <Metric label="Prières aujourd’hui" value={`${today.prayersDone.length}/5`} />
             <Metric label="Intentions" value={String(data.spiritual.intentions.length)} />
+            <Metric label="Jours de cure" value={String(data.spiritual.cureDays.filter((day) => day.status === "fait").length)} />
           </div>
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><BarChart3 className="size-4" /> Détail par zikr</CardTitle></CardHeader><CardContent className="space-y-3">{library.zikrs.map((zikr) => { const count = data.spiritual.lifetimeCounts[zikr.id] ?? 0; const max = Math.max(...Object.values(data.spiritual.lifetimeCounts), 1); return <div key={zikr.id}><div className="mb-1 flex justify-between text-xs"><span>{zikr.nom}</span><strong>{count.toLocaleString("fr-FR")}</strong></div><Progress value={(count / max) * 100} /></div>; })}</CardContent></Card>
         </TabsContent>
 
         <TabsContent value="settings" className="space-y-4">
           <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><MapPin className="size-4" /> Position & calcul des prières</CardTitle></CardHeader><CardContent className="space-y-3"><Button variant="outline" onClick={locate}><LocateFixed className="mr-1.5 size-4" /> Utiliser ma position</Button><div className="grid grid-cols-2 gap-2"><Input value={manualLat} onChange={(event) => setManualLat(event.target.value)} inputMode="decimal" placeholder="Latitude" /><Input value={manualLon} onChange={(event) => setManualLon(event.target.value)} inputMode="decimal" placeholder="Longitude" /></div><Button size="sm" onClick={() => { const latitude = Number(manualLat.replace(",", ".")); const longitude = Number(manualLon.replace(",", ".")); if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { setLocationMessage("Coordonnées invalides."); return; } store.updateSpiritualSettings({ coordinates: { latitude, longitude, label: "Position manuelle", source: "manual" } }); setLocationMessage("Coordonnées appliquées."); }}>Appliquer</Button>{locationMessage && <p className="text-xs text-muted-foreground">{locationMessage}</p>}</CardContent></Card>
-          <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><BellRing className="size-4" /> Rappels</CardTitle></CardHeader><CardContent><p className="text-sm text-muted-foreground">Les horaires sont calculés localement. La couche Android de notifications sera centralisée avec les rappels d’EVOLUTION et de Système MK.</p></CardContent></Card>
+          <Card><CardHeader><CardTitle className="flex items-center gap-2 text-base"><BellRing className="size-4" /> Rappels Android</CardTitle></CardHeader><CardContent className="space-y-3"><p className="text-sm text-muted-foreground">Un briefing quotidien et les cinq prières des sept prochains jours, calculés localement.</p><label className="block text-xs font-medium">Heure du briefing<Input type="time" value={data.spiritual.settings.briefingTime} onChange={(event) => store.updateSpiritualSettings({ briefingTime: event.target.value })} className="mt-1 max-w-40" /></label><div className="flex flex-wrap gap-2"><Button onClick={() => void enableReminders()}><BellRing className="mr-1.5 size-4" /> {data.spiritual.settings.notificationsEnabled ? "Reprogrammer" : "Activer"}</Button>{data.spiritual.settings.notificationsEnabled && <Button variant="outline" onClick={() => void disableReminders()}>Désactiver</Button>}</div>{reminderMessage && <p className="text-xs text-muted-foreground" role="status">{reminderMessage}</p>}</CardContent></Card>
         </TabsContent>
       </Tabs>
 
-      {active && <Tasbih item={active} count={data.spiritual.dailyCounts[localDateKey()]?.[active.zikrId] ?? 0} onAdd={(amount) => store.incrementZikr(active.zikrId, amount)} onReset={() => store.resetTodayZikr(active.zikrId)} onClose={() => setActive(null)} />}
+      {active && <Tasbih item={active} count={data.spiritual.dailyCounts[localDateKey()]?.[active.zikrId] ?? 0} onAdd={(amount) => { const current = data.spiritual.dailyCounts[localDateKey()]?.[active.zikrId] ?? 0; store.incrementZikr(active.zikrId, amount); if (active.zikr.nature === "cure" && active.target && current < active.target && current + amount >= active.target) store.completeCureDay(active.zikrId); }} onReset={() => store.resetTodayZikr(active.zikrId)} onClose={() => setActive(null)} />}
     </div>
   );
 }
