@@ -365,3 +365,90 @@ export function simulateCompoundInterest({ initial = 0, monthly = 50000, years =
     yearlyBreakdown
   };
 }
+
+/** Calcule la capacité financière détaillée du foyer (Revenus, Essentiels, Épargne, Investissement) */
+export function computeFinancialCapacity(finances, today = new Date()) {
+  const salary = Number(finances.monthlySalary) || 0;
+  const sources = finances.incomeSources || [];
+  const otherRecurringIncome = sources
+    .filter(s => s.active && s.kind !== 'SALARY')
+    .reduce((sum, s) => sum + (Number(s.monthlyAmount) || 0), 0);
+  const expectedMonthlyIncome = salary + otherRecurringIncome;
+
+  const ef = computeEmergencyFundStatus(finances);
+  const essentialExpenses = ef.monthlyEssential || 0;
+
+  // Dépenses non obligatoires budgétées
+  const nonObligatoryEnvelopes = (finances.envelopes || [])
+    .filter(e => e.group !== 'OBLIGATOIRE')
+    .reduce((sum, e) => sum + (Number(e.allocated) || 0), 0);
+
+  const savingsCapacity = Math.max(0, expectedMonthlyIncome - essentialExpenses - nonObligatoryEnvelopes);
+  const emergencyFundContribution = ef.percent < 100 ? Math.min(savingsCapacity * 0.4, ef.missing) : 0;
+  const projectAllocation = Math.max(0, (savingsCapacity - emergencyFundContribution) * 0.5);
+  const investmentCapacity = Math.max(0, savingsCapacity - emergencyFundContribution - projectAllocation);
+
+  return {
+    salary,
+    otherRecurringIncome,
+    expectedMonthlyIncome,
+    essentialExpenses,
+    savingsCapacity,
+    emergencyFundContribution,
+    projectAllocation,
+    investmentCapacity
+  };
+}
+
+/** Projection de solde de fin de mois */
+export function projectEndOfMonth(finances, today = new Date()) {
+  const cashStatus = computeCashStatus(finances.accounts, finances.transactions, finances.settings?.safetyMargin || 0);
+  const currentCash = cashStatus.totalCash;
+
+  const currentYearMonth = today.toISOString().slice(0, 7);
+  const summary = computeMonthlyRealSummary(finances.transactions || [], currentYearMonth);
+
+  // Charges restant à payer d'ici la fin du mois
+  const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const currentDay = today.getDate();
+  const daysLeft = lastDayOfMonth - currentDay;
+
+  let remainingCharges = 0;
+  for (const ch of (finances.charges || [])) {
+    if (!ch.active || !ch.nextDueDate) continue;
+    const dueDate = new Date(ch.nextDueDate);
+    if (dueDate.getFullYear() === today.getFullYear() && dueDate.getMonth() === today.getMonth() && dueDate.getDate() >= currentDay) {
+      remainingCharges += Number(ch.amount) || 0;
+    }
+  }
+
+  const projectedEndingCash = Math.max(0, currentCash - remainingCharges);
+  return {
+    currentCash,
+    projectedEndingCash,
+    remainingCharges,
+    daysLeft,
+    currentIncomeMonth: summary.income,
+    currentExpensesMonth: summary.expenses
+  };
+}
+
+/** Ventilation des dépenses du mois par catégorie */
+export function computeExpenseBreakdown(transactions = [], yearMonth) {
+  const targetKey = yearMonth || new Date().toISOString().slice(0, 7);
+  const map = new Map();
+
+  for (const t of transactions) {
+    if (!t.date || !t.date.startsWith(targetKey) || t.type !== 'EXPENSE') continue;
+    const cat = t.categoryId || 'cat_autre';
+    const amount = Number(t.amount) || 0;
+    map.set(cat, (map.get(cat) || 0) + amount);
+  }
+
+  const result = [];
+  for (const [categoryId, total] of map.entries()) {
+    result.push({ categoryId, total });
+  }
+  return result.sort((a, b) => b.total - a.total);
+}
+

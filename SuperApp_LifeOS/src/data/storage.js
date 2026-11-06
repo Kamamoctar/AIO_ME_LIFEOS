@@ -18,7 +18,12 @@ import {
   initialSpacedRecurrences,
   initialFinances,
   initialSpiritual,
-  initialUserSettings
+  initialUserSettings,
+  initialHealthMetrics,
+  initialSkills,
+  initialCalendarEvents,
+  initialActions,
+  initialLifeGoals
 } from './seedData.js';
 
 const STORAGE_KEY = 'aio_lifeos_data_v1';
@@ -74,6 +79,12 @@ export function loadStoredData() {
       data.userSettings = { ...defaults.userSettings };
     }
 
+    if (!data.healthMetrics) data.healthMetrics = [];
+    if (!data.skills) data.skills = [];
+    if (!data.calendarEvents) data.calendarEvents = [];
+    if (!data.actions) data.actions = [];
+    if (!data.lifeGoals) data.lifeGoals = [];
+
     return checkDailyReset(data);
   } catch (err) {
     console.error('Failed to load storage, initializing defaults', err);
@@ -111,6 +122,11 @@ export function createDefaultData() {
     finances: JSON.parse(JSON.stringify(initialFinances)),
     spiritual: JSON.parse(JSON.stringify(initialSpiritual)),
     userSettings: JSON.parse(JSON.stringify(initialUserSettings)),
+    healthMetrics: JSON.parse(JSON.stringify(initialHealthMetrics)),
+    skills: JSON.parse(JSON.stringify(initialSkills)),
+    calendarEvents: JSON.parse(JSON.stringify(initialCalendarEvents)),
+    actions: JSON.parse(JSON.stringify(initialActions)),
+    lifeGoals: JSON.parse(JSON.stringify(initialLifeGoals)),
     reviews: {
       weekly: [],
       monthly: []

@@ -339,3 +339,19 @@ export const quotes = [
   { text: "La vraie richesse d’un homme réside dans la discipline de son esprit et la pureté de son cœur.", author: "Proverbe" },
   { text: "Une vision sans exécution n'est qu'une hallucination.", author: "Thomas Edison" }
 ];
+
+// Santé & Forme (LIFEosApk Health)
+export const initialHealthMetrics = [];
+
+// Compétences & Formations (LIFEosApk Skills)
+export const initialSkills = [];
+
+// Calendrier & Événements (LIFEosApk Calendar)
+export const initialCalendarEvents = [];
+
+// Actions & Tâches ouvertes (LIFEosApk Actions)
+export const initialActions = [];
+
+// Objectifs de vie par domaine (LIFEosApk Goals)
+export const initialLifeGoals = [];
+

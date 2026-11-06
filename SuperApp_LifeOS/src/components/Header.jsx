@@ -1,9 +1,16 @@
 import React from 'react';
-import { Volume2, VolumeX, Shield, Sun, Moon, Flame, Zap } from 'lucide-react';
+import { Volume2, VolumeX, Shield, Sun, Moon, Flame, Zap, Sparkles, AlertOctagon } from 'lucide-react';
 import { sound } from '../core/sound.js';
 import { xpRequiredForLevel } from '../data/storage.js';
 
-export default function Header({ player, setPlayer, onOpenPanic, theme, onToggleTheme }) {
+export default function Header({
+  player,
+  setPlayer,
+  userSettings,
+  onOpenPanic,
+  theme,
+  onToggleTheme
+}) {
   const currentFloor = player.level === 1 ? 0 : xpRequiredForLevel(player.level);
   const nextTarget = xpRequiredForLevel(player.level + 1);
   const xpInLevel = Math.max(0, player.xpTotal - currentFloor);
@@ -18,143 +25,118 @@ export default function Header({ player, setPlayer, onOpenPanic, theme, onToggle
 
   const isLight = theme === 'light';
 
+  // Astre element calculation from birthDate
+  const today = new Date();
+  const birthDateObj = new Date(userSettings?.birthDate || '1995-01-01');
+  const diffDays = Math.floor((today - birthDateObj) / (1000 * 60 * 60 * 24));
+  const cycleDay45 = Math.abs(diffDays % 45) + 1;
+
+  let cycleElement = 'Feu';
+  let elementColor = 'var(--accent-red)';
+  if (cycleDay45 >= 12 && cycleDay45 <= 22) {
+    cycleElement = 'Terre';
+    elementColor = 'var(--accent-gold)';
+  } else if (cycleDay45 >= 23 && cycleDay45 <= 33) {
+    cycleElement = 'Air';
+    elementColor = 'var(--accent-cyan)';
+  } else if (cycleDay45 >= 34) {
+    cycleElement = 'Eau';
+    elementColor = '#60A5FA';
+  }
+
   return (
-    <header style={{
-      background: isLight ? 'rgba(255, 255, 255, 0.96)' : 'rgba(13, 17, 29, 0.95)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
-      borderBottom: `1px solid ${isLight ? 'rgba(0, 0, 0, 0.08)' : 'rgba(255, 255, 255, 0.08)'}`,
-      padding: '10px 14px 8px',
-      position: 'sticky',
-      top: 0,
-      zIndex: 90,
-      boxSizing: 'border-box',
-      width: '100%',
-      maxWidth: 500,
-      margin: '0 auto'
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        {/* Hunter Identity & Level */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-          <div style={{
-            width: 32,
-            height: 32,
-            minWidth: 32,
-            borderRadius: 8,
-            background: 'linear-gradient(135deg, rgba(56, 189, 248, 0.2), rgba(139, 92, 246, 0.35))',
-            border: '1px solid var(--border-cyan-dim)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}>
-            <Shield size={16} color="var(--border-cyan)" />
+    <header className="cyber-island-header">
+      {/* 1. Left: Hunter Rank & Level */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <span className={`hunter-rank-pill rank-${player.rank || 'E'}`}>
+          {player.rank || 'E'}
+        </span>
+        <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ fontFamily: 'var(--font-hud)', fontSize: 11, fontWeight: 800, color: '#fff' }}>
+              LVL {player.level || 1}
+            </span>
+            <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>
+              ({percent}%)
+            </span>
           </div>
-
-          <div style={{ minWidth: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{
-                fontFamily: 'var(--font-title)',
-                fontSize: 12,
-                fontWeight: 900,
-                color: 'var(--text-white)',
-                letterSpacing: 0.5,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis'
-              }}>
-                {player.codename.toUpperCase()}
-              </span>
-              <span className={`rank-badge rank-${player.rank}`}>
-                RANG {player.rank}
-              </span>
-            </div>
-            <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)', fontWeight: 600 }}>
-              NIVEAU {player.level} • {player.xpTotal} XP
-            </div>
+          <div className="hud-bar-container" style={{ width: 48, height: 3, marginTop: 2 }}>
+            <div className="hud-bar-fill" style={{ width: `${percent}%` }} />
           </div>
-        </div>
-
-        {/* Streaks & Action Controls */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          {/* Streak NoFap Pill */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3,
-            padding: '3px 8px',
-            borderRadius: 12,
-            background: 'rgba(239, 68, 68, 0.1)',
-            border: '1px solid var(--alert-red-dim)',
-            fontSize: 10,
-            fontFamily: 'var(--font-hud)',
-            fontWeight: 800,
-            color: 'var(--alert-red)'
-          }} title="Streak Pureté">
-            <Flame size={12} />
-            <span>{player.streakNoFap}j</span>
-          </div>
-
-          {/* Theme Switch */}
-          <button 
-            onClick={onToggleTheme}
-            style={{
-              background: isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.05)',
-              border: `1px solid ${isLight ? '#CBD5E1' : 'rgba(255, 255, 255, 0.1)'}`,
-              color: 'var(--text-main)',
-              width: 28,
-              height: 28,
-              borderRadius: 6,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            title={isLight ? 'Activer Mode Sombre' : 'Activer Mode Clair'}
-          >
-            {isLight ? <Moon size={14} /> : <Sun size={14} />}
-          </button>
-
-          {/* Sound Toggle */}
-          <button 
-            onClick={toggleSound}
-            style={{
-              background: isLight ? '#E2E8F0' : 'rgba(255, 255, 255, 0.05)',
-              border: `1px solid ${isLight ? '#CBD5E1' : 'rgba(255, 255, 255, 0.1)'}`,
-              color: sound.enabled ? 'var(--border-cyan)' : 'var(--text-dim)',
-              width: 28,
-              height: 28,
-              borderRadius: 6,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            title={sound.enabled ? 'Son activé' : 'Son coupé'}
-          >
-            {sound.enabled ? <Volume2 size={14} /> : <VolumeX size={14} />}
-          </button>
-
-          {/* SOS Urgence */}
-          <button 
-            onClick={onOpenPanic}
-            className="btn-monarch btn-danger"
-            style={{ padding: '4px 7px', fontSize: 10, borderRadius: 6, minHeight: 28 }}
-            title="Protocole d'urgence Pureté"
-          >
-            🆘
-          </button>
         </div>
       </div>
 
-      {/* Level XP Progress Bar */}
-      <div style={{ marginTop: 2 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 9, fontFamily: 'var(--font-hud)', marginBottom: 2 }}>
-          <span style={{ color: 'var(--text-dim)', fontWeight: 600 }}>PROGRESSION NIVEAU</span>
-          <span style={{ color: 'var(--border-cyan)', fontWeight: 700 }}>{percent}% ({xpInLevel}/{xpNeeded} XP)</span>
+      {/* 2. Center: Astre Status & NoFap Streak */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, overflow: 'hidden' }}>
+        <div className="astre-status-pill" title="Cycle de Destin 45 jours">
+          <Sparkles size={10} color={elementColor} />
+          <span style={{ fontSize: 10, color: elementColor }}>{cycleElement}</span>
+          <span style={{ fontSize: 9, color: 'var(--text-muted)' }}>J{cycleDay45}</span>
         </div>
-        <div className="hud-bar-container">
-          <div className="hud-bar-fill" style={{ width: `${percent}%` }} />
+
+        <div className="streak-status-pill" title="Jours de pureté NoFap">
+          <Flame size={11} color="var(--accent-emerald)" />
+          <span style={{ fontSize: 10 }}>{player.streakNoFap || 0}j</span>
         </div>
+      </div>
+
+      {/* 3. Right: Controls (Sound, Theme, SOS Pureté) */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        {/* SOS Button */}
+        <button
+          onClick={onOpenPanic}
+          style={{
+            padding: '3px 7px',
+            borderRadius: 'var(--radius-pill)',
+            background: 'rgba(255, 51, 102, 0.15)',
+            border: '1px solid var(--accent-red)',
+            color: 'var(--accent-red)',
+            fontSize: 9,
+            fontFamily: 'var(--font-hud)',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 3
+          }}
+          title="SOS Urgence Pureté"
+        >
+          <AlertOctagon size={11} /> SOS
+        </button>
+
+        {/* Theme Switch */}
+        <button
+          onClick={onToggleTheme}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: 'var(--text-secondary)',
+            cursor: 'pointer',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+          title="Changer de thème (Clair / Sombre)"
+        >
+          {isLight ? <Moon size={15} color="var(--accent-cyan)" /> : <Sun size={15} color="var(--accent-gold)" />}
+        </button>
+
+        {/* Audio Toggle */}
+        <button
+          onClick={toggleSound}
+          style={{
+            background: 'none',
+            border: 'none',
+            color: player.soundEnabled ? 'var(--accent-cyan)' : 'var(--text-muted)',
+            cursor: 'pointer',
+            padding: '4px',
+            display: 'flex',
+            alignItems: 'center'
+          }}
+          title="Activer/Désactiver le son"
+        >
+          {player.soundEnabled ? <Volume2 size={15} /> : <VolumeX size={15} />}
+        </button>
       </div>
     </header>
   );

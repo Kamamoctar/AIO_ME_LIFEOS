@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Header from './components/Header.jsx';
 import Navigation from './components/Navigation.jsx';
-import DashboardView from './components/DashboardView.jsx';
 import DailyView from './components/DailyView.jsx';
 import ProjectsView from './components/ProjectsView.jsx';
 import SpiritualView from './components/SpiritualView.jsx';
 import FinancesView from './components/FinancesView.jsx';
 import SystemView from './components/SystemView.jsx';
+import QuickAddModal from './components/QuickAddModal.jsx';
 import PanicModal from './components/PanicModal.jsx';
 import LevelUpOverlay from './components/LevelUpOverlay.jsx';
 import StatDetailModal from './components/StatDetailModal.jsx';
@@ -21,7 +21,8 @@ import './core/theme.css';
 
 export default function App() {
   const [data, setData] = useState(() => loadStoredData());
-  const [activeTab, setActiveTab] = useState('daily');
+  const [activeTab, setActiveTab] = useState('today'); // 'today', 'finances', 'projects', 'spiritual', 'system'
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isPanicOpen, setIsPanicOpen] = useState(false);
   const [levelUpInfo, setLevelUpInfo] = useState(null);
   const [selectedStatCode, setSelectedStatCode] = useState(null);
@@ -225,6 +226,99 @@ export default function App() {
     }));
   };
 
+  // Life Goals (LIFEos)
+  const handleAddLifeGoal = (goal) => {
+    setData(prev => ({
+      ...prev,
+      lifeGoals: [goal, ...(prev.lifeGoals || [])]
+    }));
+  };
+
+  const handleUpdateLifeGoal = (updatedGoal) => {
+    setData(prev => ({
+      ...prev,
+      lifeGoals: (prev.lifeGoals || []).map(g => g.id === updatedGoal.id ? updatedGoal : g)
+    }));
+  };
+
+  const handleDeleteLifeGoal = (goalId) => {
+    sound.playClick();
+    setData(prev => ({
+      ...prev,
+      lifeGoals: (prev.lifeGoals || []).filter(g => g.id !== goalId)
+    }));
+  };
+
+  // Health Metrics (LIFEos)
+  const handleAddHealthMetric = (metric) => {
+    setData(prev => ({
+      ...prev,
+      healthMetrics: [metric, ...(prev.healthMetrics || [])]
+    }));
+  };
+
+  const handleDeleteHealthMetric = (metricId) => {
+    setData(prev => ({
+      ...prev,
+      healthMetrics: (prev.healthMetrics || []).filter(m => m.id !== metricId)
+    }));
+  };
+
+  // Skills (LIFEos)
+  const handleAddSkill = (skill) => {
+    setData(prev => ({
+      ...prev,
+      skills: [...(prev.skills || []), skill]
+    }));
+  };
+
+  const handleUpdateSkill = (updatedSkill) => {
+    setData(prev => ({
+      ...prev,
+      skills: (prev.skills || []).map(s => s.id === updatedSkill.id ? updatedSkill : s)
+    }));
+  };
+
+  const handleDeleteSkill = (skillId) => {
+    sound.playClick();
+    setData(prev => ({
+      ...prev,
+      skills: (prev.skills || []).filter(s => s.id !== skillId)
+    }));
+  };
+
+  // Calendar Events (LIFEos)
+  const handleAddCalendarEvent = (event) => {
+    setData(prev => ({
+      ...prev,
+      calendarEvents: [event, ...(prev.calendarEvents || [])]
+    }));
+  };
+
+  const handleToggleCalendarEvent = (eventId) => {
+    sound.playClick();
+    setData(prev => ({
+      ...prev,
+      calendarEvents: (prev.calendarEvents || []).map(ev => ev.id === eventId ? { ...ev, completed: !ev.completed } : ev)
+    }));
+  };
+
+  const handleDeleteCalendarEvent = (eventId) => {
+    sound.playClick();
+    setData(prev => ({
+      ...prev,
+      calendarEvents: (prev.calendarEvents || []).filter(ev => ev.id !== eventId)
+    }));
+  };
+
+  // Actions & Tasks (LIFEos)
+  const handleAddAction = (action) => {
+    setData(prev => ({
+      ...prev,
+      actions: [action, ...(prev.actions || [])]
+    }));
+  };
+
   // Spaced Recurrences (Évolution)
   const handleCompleteRecurrence = (recId) => {
     setData(prev => ({
@@ -313,11 +407,12 @@ export default function App() {
 
   // Claim Reward
   const handleClaimReward = (rewardId) => {
-    const reward = data.rewards.find(r => r.id === rewardId);
+    const reward = (data.rewards || []).find(r => r.id === rewardId);
     if (!reward) return;
-    if (data.player.xpTotal < reward.cost) {
+    const cost = reward.costXp || reward.cost || 100;
+    if (data.player.xpTotal < cost) {
       sound.playAlarm();
-      alert(`XP insuffisant ! Tu as besoin de ${reward.cost} XP (actuel : ${data.player.xpTotal} XP).`);
+      alert(`XP insuffisant ! Tu as besoin de ${cost} XP (actuel : ${data.player.xpTotal} XP).`);
       return;
     }
     sound.playLevelUp();
@@ -325,11 +420,11 @@ export default function App() {
       ...prev,
       player: {
         ...prev.player,
-        xpTotal: prev.player.xpTotal - reward.cost,
-        xpSpent: (prev.player.xpSpent || 0) + reward.cost
+        xpTotal: prev.player.xpTotal - cost,
+        xpSpent: (prev.player.xpSpent || 0) + cost
       }
     }));
-    alert(`🎉 Récompense « ${reward.title} » accordée ! Savoure ton repos mérité.`);
+    alert(`🎉 Récompense « ${reward.name || reward.title} » accordée ! Savoure ton repos mérité.`);
   };
 
   // Pureté SOS Resisted
@@ -358,32 +453,21 @@ export default function App() {
 
   return (
     <div className={`app-container ${currentTheme === 'light' ? 'light-theme' : ''}`}>
-      {/* Universal Header */}
+      {/* Cyber-Monarch Island Header */}
       <Header
         player={data.player}
         setPlayer={(updater) => setData(prev => ({ ...prev, player: typeof updater === 'function' ? updater(prev.player) : updater }))}
+        userSettings={data.userSettings}
         onOpenPanic={() => setIsPanicOpen(true)}
         theme={currentTheme}
         onToggleTheme={handleToggleTheme}
       />
 
-      {/* Main Screen Views */}
+      {/* Main Screen Content */}
       <main style={{ flex: 1, minHeight: 'calc(100vh - 160px)', width: '100%', maxWidth: '100%', boxSizing: 'border-box' }}>
-        {activeTab === 'dashboard' && (
-          <DashboardView
-            player={data.player}
-            stats={data.stats}
-            dailyQuests={data.dailyQuests}
-            monthlyBoss={data.monthlyBoss}
-            lastPenaltyNotice={data.lastPenaltyNotice}
-            setActiveTab={setActiveTab}
-            onSelectStat={(code) => setSelectedStatCode(code)}
-            onOpenPanic={() => setIsPanicOpen(true)}
-            theme={currentTheme}
-          />
-        )}
-
-        {activeTab === 'daily' && (
+        
+        {/* Tab 1: Cockpit & Aujourd'hui */}
+        {(activeTab === 'today' || activeTab === 'daily') && (
           <DailyView
             dailyQuests={data.dailyQuests}
             onToggleQuest={handleToggleDailyQuest}
@@ -393,14 +477,32 @@ export default function App() {
             focusTrio={data.focusTrio}
             onValidateHabit={handleValidateHabit}
             userSettings={data.userSettings}
+            finances={data.finances}
+            onUpdateFinances={handleUpdateFinances}
+            actions={data.actions}
             onAddCapturedTask={handleCaptureTask}
             onAddXp={addExperience}
             theme={currentTheme}
           />
         )}
 
+        {/* Tab 2: FinanceOS */}
+        {activeTab === 'finances' && (
+          <FinancesView
+            finances={data.finances}
+            onUpdateFinances={handleUpdateFinances}
+            onAddXp={addExperience}
+            theme={currentTheme}
+          />
+        )}
+
+        {/* Tab 3: Projets, Donjons, Quarantaine & Objectifs */}
         {activeTab === 'projects' && (
           <ProjectsView
+            lifeGoals={data.lifeGoals}
+            onAddLifeGoal={handleAddLifeGoal}
+            onUpdateLifeGoal={handleUpdateLifeGoal}
+            onDeleteLifeGoal={handleDeleteLifeGoal}
             activeProjects={data.activeProjects}
             onSaveProject={handleSaveProject}
             onAddProject={handleAddProject}
@@ -419,6 +521,7 @@ export default function App() {
           />
         )}
 
+        {/* Tab 4: Spiritualité, Astre, Prières & Tasbih */}
         {activeTab === 'spiritual' && (
           <SpiritualView
             spiritual={data.spiritual}
@@ -430,21 +533,24 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'finances' && (
-          <FinancesView
-            finances={data.finances}
-            onUpdateFinances={handleUpdateFinances}
-            onAddXp={addExperience}
-            theme={currentTheme}
-          />
-        )}
-
+        {/* Tab 5: Vitalité, Thor, Santé, Compétences & Calendrier */}
         {activeTab === 'system' && (
           <SystemView
             player={data.player}
             setPlayer={(updater) => setData(prev => ({ ...prev, player: typeof updater === 'function' ? updater(prev.player) : updater }))}
             userSettings={data.userSettings}
             onUpdateUserSettings={handleUpdateUserSettings}
+            healthMetrics={data.healthMetrics}
+            onAddHealthMetric={handleAddHealthMetric}
+            onDeleteHealthMetric={handleDeleteHealthMetric}
+            skills={data.skills}
+            onAddSkill={handleAddSkill}
+            onUpdateSkill={handleUpdateSkill}
+            onDeleteSkill={handleDeleteSkill}
+            calendarEvents={data.calendarEvents}
+            onAddCalendarEvent={handleAddCalendarEvent}
+            onToggleCalendarEvent={handleToggleCalendarEvent}
+            onDeleteCalendarEvent={handleDeleteCalendarEvent}
             titles={data.titles}
             rewards={data.rewards}
             books={data.books}
@@ -468,12 +574,26 @@ export default function App() {
         )}
       </main>
 
-      {/* Bottom Navigation */}
+      {/* Floating Monarch Prism Navigation Dock */}
       <Navigation
         activeTab={activeTab}
         setActiveTab={setActiveTab}
+        onOpenQuickAdd={() => setIsQuickAddOpen(true)}
         pendingQuestsCount={pendingQuestsCount}
         theme={currentTheme}
+      />
+
+      {/* Universal Floating Quick-Add Modal */}
+      <QuickAddModal
+        isOpen={isQuickAddOpen}
+        onClose={() => setIsQuickAddOpen(false)}
+        finances={data.finances}
+        onUpdateFinances={handleUpdateFinances}
+        onAddIdea={handleAddIdea}
+        onAddHealthMetric={handleAddHealthMetric}
+        onAddSkill={handleAddSkill}
+        onAddAction={handleAddAction}
+        onAddXp={addExperience}
       />
 
       {/* Emergency Pureté SOS Modal */}

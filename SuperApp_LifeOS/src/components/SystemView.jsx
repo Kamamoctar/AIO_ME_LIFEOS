@@ -1,16 +1,38 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Trophy, Gift, Book, Dumbbell, Shield, Download, Upload, 
   RotateCcw, Check, Sparkles, Clock, Play, Pause, AlertTriangle,
-  User, Flame, Heart, Bell, Calendar, Edit2, Plus, Trash2, CheckCircle2
+  User, Flame, Heart, Bell, Calendar as CalendarIcon, Edit2, Plus, 
+  Trash2, CheckCircle2, HeartPulse, Scale as ScaleIcon, Moon, Footprints,
+  GraduationCap, Award, BookOpen, Languages, Wrench, ChevronLeft, ChevronRight,
+  AlertOctagon, CheckSquare, Square, DollarSign, ArrowRight
 } from 'lucide-react';
 import { sound } from '../core/sound.js';
+import { formatFCFA } from '../core/financeEngine.js';
+
+const SKILL_CATEGORIES = [
+  { id: 'FORMATION', label: 'Formations', icon: BookOpen },
+  { id: 'CERTIFICATION', label: 'Certifications', icon: Award },
+  { id: 'LANGUE', label: 'Langues', icon: Languages },
+  { id: 'TECHNIQUE', label: 'Compétences Techniques', icon: Wrench },
+];
 
 export default function SystemView({
   player,
   setPlayer,
   userSettings,
   onUpdateUserSettings,
+  healthMetrics = [],
+  onAddHealthMetric,
+  onDeleteHealthMetric,
+  skills = [],
+  onAddSkill,
+  onUpdateSkill,
+  onDeleteSkill,
+  calendarEvents = [],
+  onAddCalendarEvent,
+  onToggleCalendarEvent,
+  onDeleteCalendarEvent,
   titles = [],
   rewards = [],
   books = [],
@@ -26,54 +48,69 @@ export default function SystemView({
   onUpdateBookProgress,
   onAddBook,
   allData,
-  finances,
+  finances = {},
   onUpdateFinances,
   onImportBackup,
   onAddXp,
   theme,
   onToggleTheme
 }) {
-  const [subTab, setSubTab] = useState('profile'); // 'profile', 'settings', 'saturn', 'workouts', 'bilans', 'titles', 'books', 'backup'
+  const [subTab, setSubTab] = useState('health'); // 'health', 'thor', 'skills', 'calendar', 'saturn', 'bilans', 'shop', 'books', 'settings'
   const [selectedDay, setSelectedDay] = useState('lundi');
 
-  // Codename edit
-  const [isEditingCodename, setIsEditingCodename] = useState(false);
+  // HEALTH FORM STATE (Point du jour)
+  const [healthWeight, setHealthWeight] = useState('');
+  const [healthSportMin, setHealthSportMin] = useState('30');
+  const [healthSleepH, setHealthSleepH] = useState('7.5');
+  const [healthNotes, setHealthNotes] = useState('');
+
+  // SKILL FORM MODAL STATE
+  const [showSkillModal, setShowSkillModal] = useState(false);
+  const [editSkillId, setEditSkillId] = useState(null);
+  const [skillName, setSkillName] = useState('');
+  const [skillCategory, setSkillCategory] = useState('FORMATION');
+  const [skillLevel, setSkillLevel] = useState(0);
+  const [skillTargetLevel, setSkillTargetLevel] = useState(100);
+  const [skillTargetDate, setSkillTargetDate] = useState('');
+  const [skillNotes, setSkillNotes] = useState('');
+
+  // CALENDAR STATE
+  const [calendarMonthOffset, setCalendarMonthOffset] = useState(0);
+  const [showCalendarTaskModal, setShowCalendarTaskModal] = useState(false);
+  const [calendarTaskTitle, setCalendarTaskTitle] = useState('');
+  const [calendarTaskDate, setCalendarTaskDate] = useState(new Date().toISOString().split('T')[0]);
+  const [calendarTaskPriority, setCalendarTaskPriority] = useState('HAUTE');
+
+  // WORKOUT REST TIMER
+  const [restTime, setRestTime] = useState(60);
+  const [restRunning, setRestRunning] = useState(false);
+
+  // HANDSTAND STOPWATCH
+  const [hsTimer, setHsTimer] = useState(0);
+  const [hsRunning, setHsRunning] = useState(false);
+
+  // SETTINGS FORM STATE
   const [codenameInput, setCodenameInput] = useState(player.codename || player.name || 'Hunter');
-
-  // Weight edit
-  const [weightInput, setWeightInput] = useState(player.weight || 65);
-
-  // Settings form states
   const [birthDate, setBirthDate] = useState(userSettings?.birthDate || '1995-01-01');
   const [mondayPrayerTime, setMondayPrayerTime] = useState(userSettings?.mondayPrayerTime || '14:00');
   const [briefingMorning, setBriefingMorning] = useState(userSettings?.briefingMorningTime || '05:30');
   const [briefingEvening, setBriefingEvening] = useState(userSettings?.briefingEveningTime || '21:00');
   const [ritualMorning, setRitualMorning] = useState(userSettings?.mkRitualMorningTime || '06:00');
   const [ritualEvening, setRitualEvening] = useState(userSettings?.mkRitualEveningTime || '21:30');
-  const [sacrificeAnchor, setSacrificeAnchor] = useState(userSettings?.sacrificeAnchorDate || '2026-12-31');
-  const [notifsEnabled, setNotifsEnabled] = useState(userSettings?.notificationsEnabled ?? true);
 
-  // Rest Timer
-  const [restTime, setRestTime] = useState(60);
-  const [restRunning, setRestRunning] = useState(false);
-
-  // Handstand Stopwatch
-  const [hsTimer, setHsTimer] = useState(0);
-  const [hsRunning, setHsRunning] = useState(false);
-
-  // Weekly review form state
-  const [weeklyPercent, setWeeklyPercent] = useState(70);
+  // WEEKLY REVIEW STATE
+  const [weeklyPercent, setWeeklyPercent] = useState(80);
   const [weeklyDistractions, setWeeklyDistractions] = useState('');
   const [weeklyAdjustments, setWeeklyAdjustments] = useState('');
   const [reviewSaved, setReviewSaved] = useState(false);
 
-  // Add Book state
+  // ADD BOOK MODAL STATE
   const [showAddBook, setShowAddBook] = useState(false);
   const [newBookTitle, setNewBookTitle] = useState('');
   const [newBookAuthor, setNewBookAuthor] = useState('');
   const [newBookPages, setNewBookPages] = useState(250);
 
-  // Rest timer tick
+  // Tick Rest Timer
   useEffect(() => {
     let interval = null;
     if (restRunning && restTime > 0) {
@@ -85,7 +122,7 @@ export default function SystemView({
     return () => clearInterval(interval);
   }, [restRunning, restTime]);
 
-  // Handstand timer tick
+  // Tick Handstand Timer
   useEffect(() => {
     let interval = null;
     if (hsRunning) {
@@ -94,9 +131,164 @@ export default function SystemView({
     return () => clearInterval(interval);
   }, [hsRunning]);
 
-  // Save Settings
+  // Health KPIs calculations (last 30 days)
+  const healthStats = useMemo(() => {
+    const list = [...(healthMetrics || [])].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    const last30 = list.slice(0, 30);
+    const sportsCount = last30.filter(m => (m.sportMinutes || 0) > 0 || m.sportDone).length;
+    const avgSleep = last30.length > 0 
+      ? (last30.reduce((acc, m) => acc + (parseFloat(m.sleepHours) || 0), 0) / last30.length).toFixed(1) 
+      : '0.0';
+    const latestWeight = list.find(m => m.weight)?.weight || player.weight || 65;
+    const healthPoints = last30.filter(m => (m.sportMinutes || 0) > 0 || m.sleepHours || m.weight).length;
+    return { sportsCount, avgSleep, latestWeight, healthPoints, last30 };
+  }, [healthMetrics, player.weight]);
+
+  // Health Submit Handler
+  const handleSaveHealthPoint = () => {
+    sound.playQuestComplete();
+    const metric = {
+      id: 'hm_' + Date.now(),
+      date: new Date().toISOString(),
+      weight: healthWeight ? parseFloat(healthWeight) : null,
+      sportDone: parseInt(healthSportMin, 10) > 0,
+      sportMinutes: healthSportMin ? parseInt(healthSportMin, 10) : 0,
+      sleepHours: healthSleepH ? parseFloat(healthSleepH) : null,
+      notes: healthNotes.trim() || null
+    };
+
+    if (onAddHealthMetric) onAddHealthMetric(metric);
+    if (healthWeight && setPlayer) {
+      setPlayer(prev => ({
+        ...prev,
+        weight: parseFloat(healthWeight),
+        weightHistory: [{ date: new Date().toISOString().split('T')[0], weight: parseFloat(healthWeight) }, ...(prev.weightHistory || [])]
+      }));
+    }
+
+    onAddXp(15, 'STR');
+    setHealthWeight('');
+    setHealthNotes('');
+    alert('Point santé du jour enregistré !');
+  };
+
+  // Skill Modal Open Handler
+  const handleOpenSkillModal = (skill = null) => {
+    sound.playClick();
+    if (skill) {
+      setEditSkillId(skill.id);
+      setSkillName(skill.name || '');
+      setSkillCategory(skill.category || 'FORMATION');
+      setSkillLevel(skill.level || 0);
+      setSkillTargetLevel(skill.targetLevel || 100);
+      setSkillTargetDate(skill.targetDate || '');
+      setSkillNotes(skill.notes || '');
+    } else {
+      setEditSkillId(null);
+      setSkillName('');
+      setSkillCategory('FORMATION');
+      setSkillLevel(0);
+      setSkillTargetLevel(100);
+      setSkillTargetDate('');
+      setSkillNotes('');
+    }
+    setShowSkillModal(true);
+  };
+
+  // Skill Save Handler
+  const handleSaveSkill = () => {
+    if (!skillName.trim()) return;
+    sound.playQuestComplete();
+    const payload = {
+      id: editSkillId || 'skill_' + Date.now(),
+      name: skillName.trim(),
+      category: skillCategory,
+      level: parseInt(skillLevel, 10) || 0,
+      targetLevel: parseInt(skillTargetLevel, 10) || 100,
+      targetDate: skillTargetDate,
+      notes: skillNotes.trim()
+    };
+
+    if (editSkillId && onUpdateSkill) {
+      onUpdateSkill(payload);
+    } else if (onAddSkill) {
+      onAddSkill(payload);
+      onAddXp(20, 'INT');
+    }
+    setShowSkillModal(false);
+  };
+
+  // Calendar pressure & events computation
+  const calendarData = useMemo(() => {
+    const today = new Date();
+    const targetMonth = new Date(today.getFullYear(), today.getMonth() + calendarMonthOffset, 1);
+    const y = targetMonth.getFullYear();
+    const m = targetMonth.getMonth();
+    const inMonth = (dStr) => {
+      if (!dStr) return false;
+      const d = new Date(dStr);
+      return d.getFullYear() === y && d.getMonth() === m;
+    };
+
+    let monthlyChargesTotal = 0;
+    const events = [];
+
+    // Recurring charges
+    (finances.charges || []).forEach(c => {
+      if (c.active !== false && inMonth(c.nextDueDate || c.dueDate)) {
+        monthlyChargesTotal += (c.amount || 0);
+        events.push({
+          id: 'c_' + c.id,
+          title: c.label || c.name,
+          date: c.nextDueDate || c.dueDate,
+          amount: c.amount,
+          type: 'CHARGE'
+        });
+      }
+    });
+
+    // Calendar user tasks
+    (calendarEvents || []).forEach(ev => {
+      if (inMonth(ev.date || ev.dueDate)) {
+        events.push({
+          id: ev.id,
+          title: ev.title,
+          date: ev.date || ev.dueDate,
+          priority: ev.priority || 'MOYENNE',
+          completed: ev.completed,
+          type: 'TASK'
+        });
+      }
+    });
+
+    events.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return { targetMonth, monthlyChargesTotal, events };
+  }, [calendarMonthOffset, finances.charges, calendarEvents]);
+
+  // Calendar task add handler
+  const handleAddCalendarTask = () => {
+    if (!calendarTaskTitle.trim()) return;
+    sound.playClick();
+    if (onAddCalendarEvent) {
+      onAddCalendarEvent({
+        id: 'calev_' + Date.now(),
+        title: calendarTaskTitle.trim(),
+        date: calendarTaskDate,
+        priority: calendarTaskPriority,
+        completed: false
+      });
+      onAddXp(10, 'DSC');
+    }
+    setCalendarTaskTitle('');
+    setShowCalendarTaskModal(false);
+  };
+
+  // Settings Save Handler
   const handleSaveSettings = () => {
     sound.playLevelUp();
+    if (codenameInput.trim() && setPlayer) {
+      setPlayer(prev => ({ ...prev, codename: codenameInput.trim(), name: codenameInput.trim() }));
+    }
     if (onUpdateUserSettings) {
       onUpdateUserSettings({
         birthDate,
@@ -104,34 +296,10 @@ export default function SystemView({
         briefingMorningTime: briefingMorning,
         briefingEveningTime: briefingEvening,
         mkRitualMorningTime: ritualMorning,
-        mkRitualEveningTime: ritualEvening,
-        sacrificeAnchorDate: sacrificeAnchor,
-        notificationsEnabled: notifsEnabled
+        mkRitualEveningTime: ritualEvening
       });
     }
-    alert('Paramètres personnels et spirituels enregistrés avec succès !');
-  };
-
-  // Codename Save
-  const handleSaveCodename = () => {
-    if (!codenameInput.trim()) return;
-    sound.playClick();
-    setPlayer(prev => ({ ...prev, codename: codenameInput.trim(), name: codenameInput.trim() }));
-    setIsEditingCodename(false);
-  };
-
-  // Weight Save
-  const handleSaveWeight = () => {
-    const num = parseFloat(weightInput);
-    if (isNaN(num) || num <= 0) return;
-    sound.playLevelUp();
-    const entry = { date: new Date().toISOString().split('T')[0], weight: num };
-    setPlayer(prev => ({
-      ...prev,
-      weight: num,
-      weightHistory: [entry, ...(prev.weightHistory || [])]
-    }));
-    alert(`Poids de ${num} kg enregistré dans l'historique !`);
+    alert('Paramètres personnels enregistrés avec succès !');
   };
 
   // Declare Relapse (Pureté NoFap)
@@ -139,7 +307,7 @@ export default function SystemView({
     const confirmReset = window.confirm(
       "DÉCLARATION SOLENNELLE DE RECHUTE :\n\n" +
       "Admettre sa chute avec franchise et lucidité est la première étape de la victoire.\n" +
-      "Votre streak actuel sera remis à zéro, mais vos points d'XP et votre niveau restent intacts.\n\n" +
+      "Votre streak de pureté sera réinitialisé à zéro, mais vos points d'XP et votre niveau restent intacts.\n\n" +
       "Voulez-vous réinitialiser le compteur de pureté dès aujourd'hui ?"
     );
     if (!confirmReset) return;
@@ -186,399 +354,325 @@ export default function SystemView({
     reader.readAsText(file);
   };
 
-  // Save weekly review
-  const handleSaveWeeklyReview = () => {
-    sound.playLevelUp();
-    onAddXp(30, 'DSC');
-    setReviewSaved(true);
-    setTimeout(() => setReviewSaved(false), 4000);
-  };
-
-  // Add Book
-  const handleCreateBook = () => {
-    if (!newBookTitle.trim()) return;
-    sound.playClick();
-    if (onAddBook) {
-      onAddBook({
-        id: 'book_' + Date.now(),
-        title: newBookTitle.trim(),
-        author: newBookAuthor.trim() || 'Auteur',
-        totalPages: parseInt(newBookPages, 10) || 200,
-        currentPage: 0,
-        status: 'A_LIRE'
-      });
-    }
-    setNewBookTitle('');
-    setNewBookAuthor('');
-    setShowAddBook(false);
-  };
-
   return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '100%', boxSizing: 'border-box' }} className="animate-float">
+    <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '14px', maxWidth: '100%', boxSizing: 'border-box' }} className="animate-float">
       
-      {/* Sub Tabs Navigation */}
-      <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+      {/* Sub Tabs Navigation Capsules */}
+      <div className="pill-tabs-bar" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
         {[
-          { id: 'profile', label: '👤 PROFIL' },
-          { id: 'settings', label: '⚙️ PARAMÈTRES' },
+          { id: 'health', label: '❤️ SANTÉ & FORME' },
+          { id: 'thor', label: '🏋️ THOR WORKOUT' },
+          { id: 'skills', label: `🎓 COMPÉTENCES (${(skills || []).length})` },
+          { id: 'calendar', label: '📅 ÉCHÉANCIER' },
           { id: 'saturn', label: '📜 PACTE SATURNE' },
-          { id: 'workouts', label: '🏋️ THOR' },
           { id: 'bilans', label: '📊 BILANS & 30J' },
-          { id: 'titles', label: '🏆 TITRES & SHOP' },
+          { id: 'shop', label: '🏆 TITRES & SHOP' },
           { id: 'books', label: '📚 LIVRES' },
-          { id: 'backup', label: '💾 SAUVEGARDE' },
-        ].map(st => (
+          { id: 'settings', label: '⚙️ PARAMÈTRES' }
+        ].map(tab => (
           <button
-            key={st.id}
-            onClick={() => {
-              sound.playClick();
-              setSubTab(st.id);
-            }}
+            key={tab.id}
+            onClick={() => { sound.playClick(); setSubTab(tab.id); }}
+            className={`pill-tab ${subTab === tab.id ? 'active' : ''}`}
             style={{
-              padding: '6px 11px',
+              padding: '6px 12px',
               fontSize: 10,
               fontFamily: 'var(--font-hud)',
               fontWeight: 700,
-              borderRadius: 6,
-              border: `1px solid ${subTab === st.id ? 'var(--border-cyan)' : 'var(--border-cyan-dim)'}`,
-              background: subTab === st.id ? 'rgba(0,217,255,0.2)' : 'rgba(0,0,0,0.4)',
-              color: subTab === st.id ? 'var(--border-cyan)' : 'var(--text-muted)',
+              borderRadius: 20,
+              border: `1px solid ${subTab === tab.id ? 'var(--border-cyan)' : 'rgba(255,255,255,0.08)'}`,
+              background: subTab === tab.id ? 'rgba(0, 217, 255, 0.16)' : 'rgba(255,255,255,0.03)',
+              color: subTab === tab.id ? 'var(--border-cyan)' : 'var(--text-muted)',
               cursor: 'pointer',
-              whiteSpace: 'nowrap',
-              transition: 'all 0.15s ease'
+              whiteSpace: 'nowrap'
             }}
           >
-            {st.label}
+            {tab.label}
           </button>
         ))}
       </div>
 
-      {/* ================= SUB TAB 0: PROFIL CHASSEUR & PURETÉ ================= */}
-      {subTab === 'profile' && (
+      {/* ========================================================
+          1. SANTÉ & FORME (LIFEOS HEALTH)
+         ======================================================== */}
+      {subTab === 'health' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Identity Card */}
-          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--monarch-purple)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <User size={18} color="var(--border-cyan)" />
-                {isEditingCodename ? (
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <input 
-                      type="text" 
-                      value={codenameInput}
-                      onChange={(e) => setCodenameInput(e.target.value)}
-                      style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid var(--border-cyan)', borderRadius: 4, color: '#fff', padding: '3px 6px', fontSize: 13 }}
-                    />
-                    <button onClick={handleSaveCodename} className="btn-monarch" style={{ fontSize: 9, padding: '3px 8px' }}>OK</button>
-                  </div>
-                ) : (
-                  <span style={{ fontFamily: 'var(--font-title)', fontSize: 16, fontWeight: 900, color: '#fff' }}>
-                    {player.codename || player.name || 'Hunter'}
-                  </span>
-                )}
-                {!isEditingCodename && (
-                  <button onClick={() => setIsEditingCodename(true)} style={{ background: 'none', border: 'none', color: 'var(--text-dim)', cursor: 'pointer' }}>
-                    <Edit2 size={12} />
-                  </button>
-                )}
+          {/* KPIs Overview */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
+            <div className="kpi-pod">
+              <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Dumbbell size={12} color="var(--neon-green)" /> SÉANCES SPORT (30J)
               </div>
-              <span className={`rank-badge rank-${player.rank || 'E'}`}>
-                RANG {player.rank || 'E'}
-              </span>
+              <div className="kpi-value" style={{ color: healthStats.sportsCount >= 12 ? 'var(--neon-green)' : 'var(--neon-gold)' }}>
+                {healthStats.sportsCount} <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>/ 12</span>
+              </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginTop: 8 }}>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: 6, textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>NIVEAU</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--gold)', fontFamily: 'var(--font-title)' }}>{player.level || 1}</div>
+            <div className="kpi-pod">
+              <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Moon size={12} color="var(--neon-cyan)" /> SOMMEIL MOYEN
               </div>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: 6, textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>XP TOTAL</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--border-cyan)', fontFamily: 'var(--font-title)' }}>{player.xpTotal || 0}</div>
+              <div className="kpi-value" style={{ color: parseFloat(healthStats.avgSleep) >= 7 ? 'var(--neon-cyan)' : 'var(--accent-red)' }}>
+                {healthStats.avgSleep} <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>h</span>
               </div>
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: '8px', borderRadius: 6, textAlign: 'center' }}>
-                <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>POIDS ACTUEL</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: 'var(--neon-green)', fontFamily: 'var(--font-title)' }}>{player.weight || 65} kg</div>
+            </div>
+
+            <div className="kpi-pod">
+              <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <ScaleIcon size={12} color="var(--neon-gold)" /> DERNIER POIDS
+              </div>
+              <div className="kpi-value" style={{ color: 'var(--text-main)' }}>
+                {healthStats.latestWeight} <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>kg</span>
+              </div>
+            </div>
+
+            <div className="kpi-pod">
+              <div className="kpi-label" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                <Footprints size={12} color="var(--electric-blue)" /> POINTS SANTÉ (30J)
+              </div>
+              <div className="kpi-value" style={{ color: 'var(--electric-blue)' }}>
+                {healthStats.healthPoints} <span style={{ fontSize: 11, color: 'var(--text-dim)' }}>jours</span>
               </div>
             </div>
           </div>
 
-          {/* Pureté NoFap & Bouton Déclaration de Rechute */}
-          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--alert-red)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Flame size={16} color="var(--alert-red)" />
-                <span className="system-window-title" style={{ color: 'var(--alert-red)' }}>DISCIPLINE DE PURETÉ (NOFAP)</span>
-              </div>
-              <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--neon-green)', fontFamily: 'var(--font-hud)' }}>
-                STREAK : {player.streakNoFap || 0} JOURS
-              </span>
+          {/* Point Santé du Jour */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-green)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <HeartPulse size={16} /> POINT SANTÉ DU JOUR (SAISIE INSTANTANÉE)
             </div>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 10 }}>
-              Record personnel : <strong>{player.recordNoFap || player.streakNoFap || 0} jours</strong>. La rétention séminale forge l'aura, la testostérone et la lucidité décisionnelle.
-            </p>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
+              <div>
+                <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>POIDS (KG)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  placeholder="ex: 65.5"
+                  value={healthWeight}
+                  onChange={(e) => setHealthWeight(e.target.value)}
+                  style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>SPORT (MIN)</label>
+                <input
+                  type="number"
+                  value={healthSportMin}
+                  onChange={(e) => setHealthSportMin(e.target.value)}
+                  style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>SOMMEIL (H)</label>
+                <input
+                  type="number"
+                  step="0.5"
+                  value={healthSleepH}
+                  onChange={(e) => setHealthSleepH(e.target.value)}
+                  style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <input
+                type="text"
+                placeholder="Notes de santé, sensations énergétiques..."
+                value={healthNotes}
+                onChange={(e) => setHealthNotes(e.target.value)}
+                style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+              />
+            </div>
 
             <button
-              onClick={handleDeclareRelapse}
+              onClick={handleSaveHealthPoint}
+              className="haptic-btn"
               style={{
                 width: '100%',
-                padding: '9px',
-                background: 'rgba(255,46,76,0.12)',
-                border: '1px solid var(--alert-red)',
-                borderRadius: 6,
-                color: 'var(--alert-red)',
-                fontFamily: 'var(--font-hud)',
-                fontSize: 11,
+                padding: '8px 0',
+                background: 'linear-gradient(135deg, var(--neon-green), #10b981)',
+                color: '#000',
                 fontWeight: 800,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6
+                fontSize: 11,
+                borderRadius: 6,
+                border: 'none',
+                cursor: 'pointer'
               }}
             >
-              <AlertTriangle size={14} /> DÉCLARER UNE RECHUTE (RÉINITIALISER LE STREAK)
+              Enregistrer le Point Santé (+15 XP STR)
             </button>
           </div>
 
-          {/* Enregistrement du poids corporel */}
-          <div className="neuro-card" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>SUIVI DE LA MASSE CORPORELLE</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input 
-                type="number" 
-                step="0.1" 
-                placeholder="Poids en kg" 
-                value={weightInput} 
-                onChange={(e) => setWeightInput(e.target.value)} 
-                style={{ flex: 1, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 10px', fontSize: 13 }} 
-              />
-              <button onClick={handleSaveWeight} className="btn-monarch" style={{ fontSize: 11, padding: '6px 14px' }}>
-                Enregistrer Poids
-              </button>
+          {/* Recent 30 Days Log */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-dim)', textTransform: 'uppercase', marginBottom: 8 }}>
+              Historique des 30 Derniers Jours
             </div>
+            {healthStats.last30.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '16px 0', fontSize: 11, color: 'var(--text-muted)' }}>
+                Aucune donnée enregistrée récemment.
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 260, overflowY: 'auto' }}>
+                {healthStats.last30.map((entry, idx) => (
+                  <div
+                    key={entry.id || idx}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      padding: '8px 10px',
+                      background: 'rgba(255,255,255,0.02)',
+                      borderRadius: 6,
+                      border: '1px solid rgba(255,255,255,0.05)',
+                      fontSize: 11
+                    }}
+                  >
+                    <div>
+                      <span style={{ fontWeight: 700, color: 'var(--text-main)' }}>
+                        {entry.date ? entry.date.split('T')[0] : 'Aujourd’hui'}
+                      </span>
+                      {entry.notes && (
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{entry.notes}</div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                      {entry.weight && <span style={{ color: 'var(--neon-gold)' }}>{entry.weight} kg</span>}
+                      {entry.sportMinutes > 0 && <span style={{ color: 'var(--neon-green)' }}>{entry.sportMinutes} min</span>}
+                      {entry.sleepHours && <span style={{ color: 'var(--neon-cyan)' }}>{entry.sleepHours} h</span>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* ================= SUB TAB 1: PARAMÈTRES PERSONNELS & SPIRITUELS ================= */}
-      {subTab === 'settings' && (
+      {/* ========================================================
+          2. THOR WORKOUT (CORPS DE THOR CALISTHENICS)
+         ======================================================== */}
+      {subTab === 'thor' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="neuro-card" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 12 }}>
-              PARAMÈTRES DU MONARQUE (VIE, SPIRITUEL & MK)
-            </span>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div>
-                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 4 }}>
-                  DATE DE NAISSANCE (CALCUL DE L'ASTRE ET DES 45 JOURS) :
-                </label>
-                <input 
-                  type="date" 
-                  value={birthDate} 
-                  onChange={(e) => setBirthDate(e.target.value)} 
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12, boxSizing: 'border-box' }} 
-                />
+          {/* Rest Timer Widget */}
+          <div className="omni-card" style={{ padding: '12px 14px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>Minuteur de Repos Haptique</div>
+              <div style={{ fontSize: 20, fontWeight: 900, fontFamily: 'var(--font-hud)', color: 'var(--neon-cyan)' }}>
+                {restTime}s
               </div>
-
-              <div>
-                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 4 }}>
-                  HEURE DE LA PRIÈRE SPÉCIALE DU LUNDI :
-                </label>
-                <input 
-                  type="time" 
-                  value={mondayPrayerTime} 
-                  onChange={(e) => setMondayPrayerTime(e.target.value)} 
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12, boxSizing: 'border-box' }} 
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                <div>
-                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>
-                    BRIEFING DU MATIN :
-                  </label>
-                  <input 
-                    type="time" 
-                    value={briefingMorning} 
-                    onChange={(e) => setBriefingMorning(e.target.value)} 
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11, boxSizing: 'border-box' }} 
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>
-                    BRIEFING DU SOIR :
-                  </label>
-                  <input 
-                    type="time" 
-                    value={briefingEvening} 
-                    onChange={(e) => setBriefingEvening(e.target.value)} 
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11, boxSizing: 'border-box' }} 
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8 }}>
-                <div>
-                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>
-                    RITUEL MK MATIN :
-                  </label>
-                  <input 
-                    type="time" 
-                    value={ritualMorning} 
-                    onChange={(e) => setRitualMorning(e.target.value)} 
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11, boxSizing: 'border-box' }} 
-                  />
-                </div>
-                <div>
-                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 3 }}>
-                    RITUEL MK SOIR :
-                  </label>
-                  <input 
-                    type="time" 
-                    value={ritualEvening} 
-                    onChange={(e) => setRitualEvening(e.target.value)} 
-                    style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 11, boxSizing: 'border-box' }} 
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 4 }}>
-                  DATE D'ANCRAGE DU SACRIFICE ANNUEL :
-                </label>
-                <input 
-                  type="date" 
-                  value={sacrificeAnchor} 
-                  onChange={(e) => setSacrificeAnchor(e.target.value)} 
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', padding: '6px 8px', fontSize: 12, boxSizing: 'border-box' }} 
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid var(--border-cyan-dim)' }}>
-                <span style={{ fontSize: 11, color: '#fff' }}>Rappels et notifications</span>
-                <input 
-                  type="checkbox" 
-                  checked={notifsEnabled} 
-                  onChange={(e) => setNotifsEnabled(e.target.checked)} 
-                  style={{ width: 16, height: 16 }} 
-                />
-              </div>
-
-              <button
-                onClick={handleSaveSettings}
-                className="btn-monarch"
-                style={{ width: '100%', padding: '10px', fontSize: 11, marginTop: 4 }}
-              >
-                ✓ ENREGISTRER TOUS LES PARAMÈTRES
-              </button>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= SUB TAB 2: PACTE DE SATURNE ================= */}
-      {subTab === 'saturn' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="neuro-card" style={{ padding: '14px', borderColor: 'var(--monarch-purple)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Shield size={16} color="#c77dff" />
-                <span style={{ fontFamily: 'var(--font-title)', fontSize: 12, fontWeight: 900, color: '#c77dff' }}>
-                  CONTRAT DE SATURNE • LES 5 ENGAGEMENTS
-                </span>
-              </div>
-              <span style={{ fontSize: 10, color: 'var(--neon-green)', fontFamily: 'var(--font-hud)', fontWeight: 700 }}>
-                ✓ SCELLÉ
-              </span>
-            </div>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Cinq promesses inaltérables gravées pour la décennie. À relire le premier de chaque mois.
-            </p>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {[
-                saturnContract.p1 || 'Ne jamais compromettre ma pureté et ma discipline spirituelle pour une gratification immédiate.',
-                saturnContract.p2 || 'Travailler chaque jour avec rigueur sur les 3 projets stricts sans dispersion.',
-                saturnContract.p3 || 'Protéger la transparence financière et la sérénité du foyer.',
-                saturnContract.p4 || 'Conserver la maîtrise de ma parole : ne jamais médire, écouter deux fois plus que parler.',
-                saturnContract.p5 || 'Forger sans relâche mon corps et mon esprit pour atteindre le Rang de Monarque.'
-              ].map((clause, idx) => (
-                <div key={idx} style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid rgba(123,47,255,0.3)', borderRadius: 6, padding: '8px 10px', fontSize: 12, color: '#fff', lineHeight: 1.4 }}>
-                  <strong style={{ color: 'var(--gold)' }}>Règle {idx + 1} :</strong> {clause}
-                </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {[60, 90, 120].map(sec => (
+                <button
+                  key={sec}
+                  onClick={() => { sound.playClick(); setRestTime(sec); setRestRunning(true); }}
+                  className="haptic-btn"
+                  style={{
+                    padding: '6px 10px',
+                    fontSize: 10,
+                    fontWeight: 700,
+                    borderRadius: 6,
+                    background: 'rgba(0, 217, 255, 0.1)',
+                    border: '1px solid rgba(0, 217, 255, 0.3)',
+                    color: 'var(--neon-cyan)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  {sec}s
+                </button>
               ))}
-            </div>
-
-            <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid rgba(255,255,255,0.1)', fontSize: 11, color: 'var(--gold)' }}>
-              <strong>Question d'alignement mensuel :</strong> « Mes choix et mes actions ce mois-ci m’en rapprochent-ils ou m’en éloignent-ils ? »
+              <button
+                onClick={() => setRestRunning(!restRunning)}
+                className="haptic-btn"
+                style={{
+                  padding: '6px 10px',
+                  fontSize: 10,
+                  fontWeight: 800,
+                  borderRadius: 6,
+                  background: restRunning ? 'rgba(239, 68, 68, 0.2)' : 'rgba(34, 197, 94, 0.2)',
+                  border: `1px solid ${restRunning ? 'var(--accent-red)' : 'var(--neon-green)'}`,
+                  color: restRunning ? 'var(--accent-red)' : 'var(--neon-green)',
+                  cursor: 'pointer'
+                }}
+              >
+                {restRunning ? <Pause size={12} /> : <Play size={12} />}
+              </button>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ================= SUB TAB 3: CORPS DE THOR & CALISTHENICS ================= */}
-      {subTab === 'workouts' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Day selection */}
-          <div style={{ display: 'flex', gap: 4, overflowX: 'auto', paddingBottom: 2 }}>
-            {['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'].map(day => (
+          {/* Days Pill Selector */}
+          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }}>
+            {['lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi', 'dimanche'].map(d => (
               <button
-                key={day}
-                onClick={() => { sound.playClick(); setSelectedDay(day); }}
+                key={d}
+                onClick={() => { sound.playClick(); setSelectedDay(d); }}
                 style={{
-                  flex: 1,
-                  padding: '6px 4px',
-                  borderRadius: 4,
-                  border: `1px solid ${selectedDay === day ? 'var(--neon-green)' : 'rgba(255,255,255,0.1)'}`,
-                  background: selectedDay === day ? 'rgba(0,255,136,0.15)' : 'rgba(0,0,0,0.3)',
-                  color: selectedDay === day ? 'var(--neon-green)' : 'var(--text-dim)',
+                  padding: '5px 11px',
                   fontSize: 10,
                   fontFamily: 'var(--font-hud)',
                   fontWeight: 700,
+                  borderRadius: 14,
+                  border: `1px solid ${selectedDay === d ? 'var(--neon-cyan)' : 'rgba(255,255,255,0.06)'}`,
+                  background: selectedDay === d ? 'rgba(0,217,255,0.15)' : 'rgba(0,0,0,0.2)',
+                  color: selectedDay === d ? 'var(--neon-cyan)' : 'var(--text-muted)',
                   cursor: 'pointer',
-                  textTransform: 'uppercase',
-                  whiteSpace: 'nowrap'
+                  textTransform: 'uppercase'
                 }}
               >
-                {day.slice(0, 3)}
+                {d.slice(0, 3)}
               </button>
             ))}
           </div>
 
-          {/* Current Routine */}
+          {/* Current Day Routine */}
           {workouts[selectedDay] && (
-            <div className="neuro-card" style={{ padding: '14px' }}>
-              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--neon-green)', marginBottom: 8 }}>
+            <div className="omni-card" style={{ padding: '14px' }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)', marginBottom: 2 }}>
                 {workouts[selectedDay].focus}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
+                {workouts[selectedDay].description || 'Régularité et exécution stricte sans tricher.'}
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {workouts[selectedDay].exercises.map((exo, exoIdx) => (
-                  <div key={exoIdx} style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, padding: '8px 10px' }}>
+                {(workouts[selectedDay].exercises || []).map((exo, exoIdx) => (
+                  <div
+                    key={exoIdx}
+                    style={{
+                      padding: '10px 12px',
+                      background: 'rgba(255,255,255,0.02)',
+                      borderRadius: 8,
+                      border: '1px solid rgba(255,255,255,0.06)'
+                    }}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                      <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{exo.name}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>{exo.reps}</span>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-main)' }}>{exo.name}</span>
+                      <span style={{ fontSize: 10, color: 'var(--text-dim)', fontWeight: 600 }}>{exo.reps}</span>
                     </div>
+
                     <div style={{ display: 'flex', gap: 6 }}>
-                      {exo.sets.map((isDone, setIdx) => (
+                      {(exo.done || []).map((done, setIdx) => (
                         <button
                           key={setIdx}
-                          onClick={() => onToggleWorkoutSet(selectedDay, exoIdx, setIdx)}
+                          onClick={() => onToggleWorkoutSet && onToggleWorkoutSet(selectedDay, exoIdx, setIdx)}
+                          className="haptic-btn"
                           style={{
                             flex: 1,
-                            padding: '5px',
-                            borderRadius: 4,
-                            border: `1px solid ${isDone ? 'var(--neon-green)' : 'rgba(255,255,255,0.2)'}`,
-                            background: isDone ? 'var(--neon-green)' : 'none',
-                            color: isDone ? '#000' : '#fff',
+                            padding: '6px 0',
+                            borderRadius: 6,
+                            background: done ? 'rgba(34, 197, 94, 0.2)' : 'rgba(0,0,0,0.3)',
+                            border: `1px solid ${done ? 'var(--neon-green)' : 'rgba(255,255,255,0.1)'}`,
+                            color: done ? 'var(--neon-green)' : 'var(--text-muted)',
                             fontSize: 10,
-                            fontWeight: 700,
+                            fontWeight: 800,
                             cursor: 'pointer'
                           }}
                         >
-                          S{setIdx + 1}
+                          Série {setIdx + 1}
                         </button>
                       ))}
                     </div>
@@ -588,62 +682,66 @@ export default function SystemView({
             </div>
           )}
 
-          {/* Interactive Rest Timer */}
-          <div className="neuro-card" style={{ padding: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Clock size={18} color="var(--border-cyan)" />
-              <div>
-                <div style={{ fontSize: 10, color: 'var(--text-dim)', fontFamily: 'var(--font-hud)' }}>MINUTEUR DE REPOS</div>
-                <div style={{ fontSize: 16, fontFamily: 'var(--font-title)', color: '#fff' }}>
-                  {restTime} SECONDES
-                </div>
+          {/* Handstand Mastery 5 Levels */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-purple)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Sparkles size={16} /> PROGRESSION HANDSTAND (5 NIVEAUX)
+              </div>
+              <div style={{ fontSize: 11, fontFamily: 'var(--font-hud)', color: 'var(--neon-purple)', fontWeight: 800 }}>
+                Chrono : {hsTimer}s
               </div>
             </div>
 
-            <div style={{ display: 'flex', gap: 6 }}>
-              {[30, 60, 90].map(s => (
-                <button
-                  key={s}
-                  onClick={() => { setRestRunning(false); setRestTime(s); }}
-                  style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', color: 'var(--border-cyan)', borderRadius: 4, padding: '4px 6px', fontSize: 10, cursor: 'pointer' }}
-                >
-                  {s}s
-                </button>
-              ))}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
               <button
-                onClick={() => setRestRunning(!restRunning)}
-                className="btn-monarch"
-                style={{ padding: '6px 10px', fontSize: 11 }}
+                onClick={() => setHsRunning(!hsRunning)}
+                className="haptic-btn"
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: 6,
+                  background: hsRunning ? 'rgba(239, 68, 68, 0.2)' : 'rgba(168, 85, 247, 0.2)',
+                  border: `1px solid ${hsRunning ? 'var(--accent-red)' : 'var(--neon-purple)'}`,
+                  color: hsRunning ? 'var(--accent-red)' : 'var(--neon-purple)',
+                  fontSize: 10,
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
               >
-                {restRunning ? <Pause size={14} /> : <Play size={14} />}
+                {hsRunning ? 'Stop Chrono' : 'Lancer Chrono Équilibre'}
+              </button>
+              <button
+                onClick={() => { setHsRunning(false); setHsTimer(0); }}
+                style={{ padding: '5px 8px', borderRadius: 6, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'var(--text-muted)', fontSize: 10, cursor: 'pointer' }}
+              >
+                Reset
               </button>
             </div>
-          </div>
 
-          {/* Handstand Progress */}
-          <div className="neuro-card" style={{ padding: '12px' }}>
-            <span style={{ fontSize: 11, fontFamily: 'var(--font-title)', color: 'var(--gold)', display: 'block', marginBottom: 8 }}>
-              PROGRESSION HANDSTAND (ÉQUILIBRE SUR LES MAINS)
-            </span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(handstandLevels || []).map(hl => (
+              {(handstandLevels || []).map(lvl => (
                 <div
-                  key={hl.level}
-                  onClick={() => onToggleHandstandLevel(hl.level)}
+                  key={lvl.level}
+                  onClick={() => onToggleHandstandLevel && onToggleHandstandLevel(lvl.level)}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'space-between',
-                    padding: '6px 8px',
-                    borderRadius: 4,
-                    background: hl.completed ? 'rgba(0,255,136,0.1)' : 'rgba(0,0,0,0.3)',
-                    border: `1px solid ${hl.completed ? 'var(--neon-green)' : 'rgba(255,255,255,0.1)'}`,
-                    cursor: 'pointer',
-                    fontSize: 11
+                    gap: 8,
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    background: lvl.completed ? 'rgba(168, 85, 247, 0.12)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${lvl.completed ? 'rgba(168, 85, 247, 0.3)' : 'rgba(255,255,255,0.04)'}`,
+                    cursor: 'pointer'
                   }}
                 >
-                  <span style={{ color: hl.completed ? 'var(--neon-green)' : '#fff' }}>{hl.title}</span>
-                  <span style={{ fontSize: 9, color: 'var(--text-dim)' }}>{hl.req}</span>
+                  <CheckCircle2 size={15} color={lvl.completed ? 'var(--neon-purple)' : 'var(--text-dim)'} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>
+                      Niv {lvl.level} — {lvl.title}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{lvl.req}</div>
+                  </div>
+                  <span style={{ fontSize: 9, color: 'var(--neon-purple)', fontWeight: 800 }}>+25 XP</span>
                 </div>
               ))}
             </div>
@@ -651,32 +749,292 @@ export default function SystemView({
         </div>
       )}
 
-      {/* ================= SUB TAB 4: BILANS & DÉFI 30 JOURS ================= */}
+      {/* ========================================================
+          3. COMPÉTENCES (LIFEOS SKILLS)
+         ======================================================== */}
+      {subTab === 'skills' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="omni-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>ARBRE DE COMPÉTENCES</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Formations, Certifications, Langues & Techniques</div>
+            </div>
+            <button
+              onClick={() => handleOpenSkillModal()}
+              className="haptic-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'linear-gradient(135deg, var(--neon-cyan), var(--electric-blue))',
+                color: '#000',
+                fontWeight: 800,
+                fontSize: 11,
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              <Plus size={14} /> Compétence
+            </button>
+          </div>
+
+          {(skills || []).length === 0 ? (
+            <div className="omni-card" style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>
+              <GraduationCap size={36} style={{ margin: '0 auto 10px auto', opacity: 0.3 }} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>Aucune compétence suivie</div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>Ajoutez des formations, certifications ou langues pour mesurer votre montée en puissance.</div>
+            </div>
+          ) : (
+            SKILL_CATEGORIES.map(cat => {
+              const list = (skills || []).filter(s => s.category === cat.id);
+              if (list.length === 0) return null;
+              const Icon = cat.icon;
+              return (
+                <div key={cat.id} className="omni-card" style={{ padding: '14px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, color: 'var(--neon-cyan)', marginBottom: 10 }}>
+                    <Icon size={15} /> {cat.label.toUpperCase()}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {list.map(s => (
+                      <div key={s.id} style={{ background: 'rgba(0,0,0,0.25)', padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                          <div>
+                            <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-main)' }}>{s.name}</span>
+                            {s.notes && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{s.notes}</div>}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--neon-cyan)' }}>
+                              {s.level} / {s.targetLevel}
+                            </span>
+                            <button
+                              onClick={() => handleOpenSkillModal(s)}
+                              style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2 }}
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            {onDeleteSkill && (
+                              <button
+                                onClick={() => onDeleteSkill(s.id)}
+                                style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 2 }}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="progress-bar-hud" style={{ height: 5, borderRadius: 2 }}>
+                          <div
+                            className="progress-fill-hud"
+                            style={{
+                              width: `${Math.min(100, Math.round(((s.level || 0) / (s.targetLevel || 100)) * 100))}%`,
+                              background: 'linear-gradient(90deg, var(--neon-cyan), var(--electric-blue))'
+                            }}
+                          />
+                        </div>
+
+                        {s.targetDate && (
+                          <div style={{ fontSize: 9, color: 'var(--text-dim)', marginTop: 4 }}>
+                            Objectif cible : {s.targetDate}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          4. ÉCHÉANCIER & CALENDRIER (LIFEOS CALENDAR)
+         ======================================================== */}
+      {subTab === 'calendar' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Calendar Month Navigation Header */}
+          <div className="omni-card" style={{ padding: '12px 14px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                onClick={() => setCalendarMonthOffset(prev => prev - 1)}
+                className="haptic-btn"
+                style={{ background: 'none', border: 'none', color: 'var(--neon-cyan)', cursor: 'pointer' }}
+              >
+                <ChevronLeft size={20} />
+              </button>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-main)' }}>
+                  {calendarData.targetMonth.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })}
+                </div>
+                <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>
+                  Pression Financière : <span style={{ color: 'var(--neon-gold)', fontWeight: 800 }}>{formatFCFA(calendarData.monthlyChargesTotal)}</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setCalendarMonthOffset(prev => prev + 1)}
+                className="haptic-btn"
+                style={{ background: 'none', border: 'none', color: 'var(--neon-cyan)', cursor: 'pointer' }}
+              >
+                <ChevronRight size={20} />
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Task Add Button */}
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              onClick={() => setShowCalendarTaskModal(true)}
+              className="haptic-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '6px 12px',
+                borderRadius: 8,
+                background: 'rgba(0, 217, 255, 0.12)',
+                border: '1px solid rgba(0, 217, 255, 0.3)',
+                color: 'var(--neon-cyan)',
+                fontSize: 11,
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+            >
+              <Plus size={14} /> Ajouter une Échéance / Tâche
+            </button>
+          </div>
+
+          {/* Events List */}
+          {calendarData.events.length === 0 ? (
+            <div className="omni-card" style={{ textAlign: 'center', padding: '32px 16px', color: 'var(--text-muted)' }}>
+              <CalendarIcon size={36} style={{ margin: '0 auto 10px auto', opacity: 0.3 }} />
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-main)' }}>Aucune charge ni échéance ce mois-ci</div>
+              <div style={{ fontSize: 11, marginTop: 4 }}>Toutes vos obligations sont sous contrôle.</div>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {calendarData.events.map(ev => {
+                const isTask = ev.type === 'TASK';
+                return (
+                  <div
+                    key={ev.id}
+                    className="omni-card"
+                    style={{
+                      padding: '10px 12px',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      borderLeft: `3px solid ${isTask ? 'var(--neon-cyan)' : 'var(--neon-gold)'}`
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {isTask ? (
+                        <button
+                          onClick={() => onToggleCalendarEvent && onToggleCalendarEvent(ev.id)}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: ev.completed ? 'var(--neon-green)' : 'var(--text-dim)' }}
+                        >
+                          {ev.completed ? <CheckSquare size={16} /> : <Square size={16} />}
+                        </button>
+                      ) : (
+                        <DollarSign size={16} color="var(--neon-gold)" />
+                      )}
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: ev.completed ? 'var(--text-dim)' : 'var(--text-main)', textDecoration: ev.completed ? 'line-through' : 'none' }}>
+                          {ev.title}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 2 }}>
+                          {ev.date} • {isTask ? `Priorité ${ev.priority}` : 'Charge récurrente'}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {ev.amount && (
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-gold)' }}>
+                          {formatFCFA(ev.amount)}
+                        </span>
+                      )}
+                      {isTask && onDeleteCalendarEvent && (
+                        <button
+                          onClick={() => onDeleteCalendarEvent(ev.id)}
+                          style={{ background: 'none', border: 'none', color: 'var(--accent-red)', cursor: 'pointer', padding: 2 }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ========================================================
+          5. PACTE DE SATURNE (ÉVOLUTION)
+         ======================================================== */}
+      {subTab === 'saturn' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="omni-card" style={{ padding: '14px', borderLeft: '3px solid var(--neon-gold)' }}>
+            <div style={{ fontSize: 13, fontWeight: 900, color: 'var(--neon-gold)', letterSpacing: 0.5, marginBottom: 4 }}>
+              LE PACTE SOLENNEL DE SATURNE
+            </div>
+            <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>
+              Cinq piliers de discipline irrévocables scellés pour la décennie. L'abandon d'un seul pilier affaiblit l'édifice entier.
+            </p>
+          </div>
+
+          {[
+            { title: 'Pilier I : Pureté Spirituelle & Intégrité', desc: 'Préservation absolue du regard et de l’énergie vitale. Respect scrupuleux des 5 prières quotidiennes.' },
+            { title: 'Pilier II : Sanctuaire Familial & Foyer', desc: 'Présence, écoute et protection inconditionnelle de son épouse et des siens. Zéro colère au foyer.' },
+            { title: 'Pilier III : Forge Corporelle & Vitalité', desc: 'Entraînement régulier, alimentation saine et respect du repos reconstructeur sans compromis.' },
+            { title: 'Pilier IV : Maîtrise Financière & Patrimoine', desc: 'Règle stricte des comptes sans dépense fictive, épargne de sécurité inviolable et investissement avisé.' },
+            { title: 'Pilier V : Clarté Mentale & Concentration', desc: '4 Blocs Deep Work par jour, zéro dispersion cognitive, 3 projets actifs maximum.' }
+          ].map((pilier, idx) => (
+            <div key={idx} className="omni-card" style={{ padding: '12px 14px' }}>
+              <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-gold)', marginBottom: 2 }}>
+                {pilier.title}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                {pilier.desc}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ========================================================
+          6. BILANS & DÉFI 30 JOURS (MK & ÉVOLUTION)
+         ======================================================== */}
       {subTab === 'bilans' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* 30 Day Challenge */}
-          <div className="neuro-card" style={{ padding: '14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-              <span className="system-window-title">DÉFI DE CONSTANCE (OBJECTIF 21/30)</span>
-              <span style={{ fontSize: 11, color: 'var(--gold)', fontFamily: 'var(--font-hud)', fontWeight: 700 }}>
-                {(thirtyDayChallenge || []).filter(Boolean).length} / 30 JOURS
-              </span>
+          {/* Défi de constance 30j */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-cyan)', marginBottom: 4 }}>
+              DÉFI DE DISCIPLINE DE FER (30 JOURS)
             </div>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Cochez chaque journée où vous avez exécuté vos quêtes et respecté vos standards.
+            </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6, margin: '10px 0' }}>
-              {(thirtyDayChallenge || new Array(30).fill(false)).map((isDone, idx) => (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 6 }}>
+              {(thirtyDayChallenge || new Array(30).fill(false)).map((done, idx) => (
                 <button
                   key={idx}
-                  onClick={() => onToggleThirtyDay(idx)}
+                  onClick={() => onToggleThirtyDay && onToggleThirtyDay(idx)}
+                  className="haptic-btn"
                   style={{
                     padding: '8px 0',
-                    borderRadius: 4,
-                    border: `1px solid ${isDone ? 'var(--neon-green)' : 'rgba(255,255,255,0.1)'}`,
-                    background: isDone ? 'var(--neon-green)' : 'rgba(0,0,0,0.4)',
-                    color: isDone ? '#000' : 'var(--text-dim)',
+                    borderRadius: 6,
+                    background: done ? 'rgba(0, 217, 255, 0.25)' : 'rgba(0,0,0,0.3)',
+                    border: `1px solid ${done ? 'var(--neon-cyan)' : 'rgba(255,255,255,0.06)'}`,
+                    color: done ? 'var(--neon-cyan)' : 'var(--text-muted)',
                     fontFamily: 'var(--font-hud)',
                     fontSize: 11,
-                    fontWeight: 700,
+                    fontWeight: 800,
                     cursor: 'pointer'
                   }}
                 >
@@ -686,85 +1044,163 @@ export default function SystemView({
             </div>
           </div>
 
-          {/* Weekly Review Form */}
-          <div className="neuro-card" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 8 }}>
-              BILAN HEBDOMADAIRE DU DIMANCHE (MK)
-            </span>
+          {/* Bilan hebdomadaire */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-gold)', marginBottom: 8 }}>
+              BILAN HEBDOMADAIRE DU DIMANCHE SOIR
+            </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 2 }}>
-                  <span>Priorités accomplies cette semaine :</span>
-                  <span>{weeklyPercent}%</span>
-                </div>
+                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>
+                  SCORE DE DISCIPLINE DE LA SEMAINE : {weeklyPercent}%
+                </label>
                 <input
                   type="range"
                   min="0"
                   max="100"
                   value={weeklyPercent}
-                  onChange={(e) => setWeeklyPercent(parseInt(e.target.value, 10))}
-                  style={{ width: '100%', accentColor: 'var(--border-cyan)' }}
+                  onChange={(e) => setWeeklyPercent(e.target.value)}
+                  style={{ width: '100%', accentColor: 'var(--neon-gold)' }}
                 />
               </div>
 
               <div>
-                <span style={{ fontSize: 10, color: 'var(--alert-red)', fontFamily: 'var(--font-hud)' }}>
-                  CE QUI M’A DISPERSÉ OU FREINÉ :
-                </span>
+                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>
+                  DISTRACTIONS & FRICTIONS IDENTIFIÉES
+                </label>
                 <textarea
+                  rows={2}
+                  placeholder="Qu'est-ce qui a ralenti l'exécution cette semaine ?"
                   value={weeklyDistractions}
                   onChange={(e) => setWeeklyDistractions(e.target.value)}
-                  placeholder="Quels déclencheurs ou distractions ont volé mon temps ?"
-                  rows={2}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 11, padding: 6, outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '6px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box', resize: 'none' }}
                 />
               </div>
 
               <div>
-                <span style={{ fontSize: 10, color: 'var(--neon-green)', fontFamily: 'var(--font-hud)' }}>
-                  AJUSTEMENT FERME POUR LA SEMAINE PROCHAINE :
-                </span>
+                <label style={{ fontSize: 10, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>
+                  AJUSTEMENTS CONCRETS POUR LA SEMAINE PROCHAINE
+                </label>
                 <textarea
+                  rows={2}
+                  placeholder="Actions correctrices immédiates..."
                   value={weeklyAdjustments}
                   onChange={(e) => setWeeklyAdjustments(e.target.value)}
-                  placeholder="La seule règle que j'applique pour corriger le tir..."
-                  rows={2}
-                  style={{ width: '100%', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, color: '#fff', fontSize: 11, padding: 6, outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', padding: '6px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box', resize: 'none' }}
                 />
               </div>
 
               <button
-                onClick={handleSaveWeeklyReview}
-                className="btn-monarch"
-                style={{ padding: '8px', fontSize: 11, marginTop: 4 }}
+                onClick={() => {
+                  sound.playLevelUp();
+                  onAddXp(30, 'DSC');
+                  setReviewSaved(true);
+                  setTimeout(() => setReviewSaved(false), 3000);
+                }}
+                className="haptic-btn"
+                style={{
+                  padding: '8px 0',
+                  background: 'linear-gradient(135deg, var(--neon-gold), #f59e0b)',
+                  color: '#000',
+                  fontWeight: 800,
+                  fontSize: 11,
+                  borderRadius: 6,
+                  border: 'none',
+                  cursor: 'pointer',
+                  marginTop: 4
+                }}
               >
-                {reviewSaved ? '✓ BILAN ENREGISTRÉ (+30 XP)' : 'ENREGISTRER LE BILAN HEBDOMADAIRE'}
+                {reviewSaved ? '✓ Bilan Clôturé (+30 XP DSC)' : 'Valider le Bilan Hebdomadaire'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ================= SUB TAB 5: TITRES & SHOP ================= */}
-      {subTab === 'titles' && (
+      {/* ========================================================
+          7. TITRES DE CHASSEUR & BOUTIQUE XP (SOLO LEVELING)
+         ======================================================== */}
+      {subTab === 'shop' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Shop */}
-          <div className="neuro-card" style={{ padding: '12px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 8 }}>
-              BOUTIQUE XP & RÉCOMPENSES DU GUERRIER
-            </span>
+          {/* Solde XP actuel */}
+          <div className="omni-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
+            <div>
+              <div style={{ fontSize: 10, color: 'var(--text-dim)', textTransform: 'uppercase' }}>XP Disponible pour la Boutique</div>
+              <div style={{ fontSize: 18, fontWeight: 900, fontFamily: 'var(--font-hud)', color: 'var(--neon-gold)' }}>
+                {player.xpTotal} XP
+              </div>
+            </div>
+            <Trophy size={28} color="var(--neon-gold)" />
+          </div>
+
+          {/* Titres de Chasseur */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-purple)', marginBottom: 8 }}>
+              TITRES DE CHASSEUR DÉBLOQUÉS
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(rewards || []).map(r => (
-                <div key={r.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 6, padding: '8px 10px' }}>
+              {(titles || []).map(t => (
+                <div
+                  key={t.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    background: t.unlocked ? 'rgba(168, 85, 247, 0.15)' : 'rgba(255,255,255,0.02)',
+                    border: `1px solid ${t.unlocked ? 'rgba(168, 85, 247, 0.4)' : 'rgba(255,255,255,0.05)'}`
+                  }}
+                >
+                  <Award size={16} color={t.unlocked ? 'var(--neon-purple)' : 'var(--text-dim)'} />
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{r.name || r.title}</div>
-                    <div style={{ fontSize: 10, color: 'var(--gold)', fontFamily: 'var(--font-hud)' }}>Coût : {r.costXp || r.cost} XP</div>
+                    <div style={{ fontSize: 11, fontWeight: 800, color: t.unlocked ? 'var(--text-main)' : 'var(--text-dim)' }}>
+                      {t.title}
+                    </div>
+                    <div style={{ fontSize: 9, color: 'var(--text-muted)' }}>{t.desc}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Boutique Récompenses Méritées */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-green)', marginBottom: 8 }}>
+              RÉCOMPENSES MÉRITÉES
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {(rewards || []).map(rew => (
+                <div
+                  key={rew.id}
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '8px 10px',
+                    borderRadius: 6,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)'
+                  }}
+                >
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-main)' }}>{rew.name || rew.title}</div>
+                    <div style={{ fontSize: 9, color: 'var(--neon-gold)', fontWeight: 800 }}>Coût : {rew.costXp || rew.cost} XP</div>
                   </div>
                   <button
-                    onClick={() => onClaimReward(r.id)}
-                    className="btn-monarch"
-                    style={{ padding: '4px 8px', fontSize: 10 }}
+                    onClick={() => onClaimReward && onClaimReward(rew.id)}
+                    className="haptic-btn"
+                    style={{
+                      padding: '5px 10px',
+                      borderRadius: 6,
+                      background: 'rgba(34, 197, 94, 0.15)',
+                      border: '1px solid rgba(34, 197, 94, 0.3)',
+                      color: 'var(--neon-green)',
+                      fontSize: 10,
+                      fontWeight: 800,
+                      cursor: 'pointer'
+                    }}
                   >
                     Réclamer
                   </button>
@@ -772,128 +1208,467 @@ export default function SystemView({
               ))}
             </div>
           </div>
-
-          {/* Titles */}
-          <div className="neuro-card" style={{ padding: '12px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 8 }}>
-              GALERIE DES TITRES DÉBLOCABLES
-            </span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {(titles || []).map(t => (
-                <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 4, background: t.unlocked ? 'rgba(0,255,136,0.1)' : 'rgba(0,0,0,0.3)', border: `1px solid ${t.unlocked ? 'var(--neon-green)' : 'rgba(255,255,255,0.1)'}` }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: t.unlocked ? 'var(--neon-green)' : '#fff' }}>{t.title || t.name}</div>
-                    <div style={{ fontSize: 9, color: 'var(--text-dim)' }}>{t.desc || t.condition}</div>
-                  </div>
-                  {t.unlocked && <span style={{ fontSize: 9, color: 'var(--neon-green)', fontFamily: 'var(--font-hud)' }}>DÉBLOQUÉ</span>}
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       )}
 
-      {/* ================= SUB TAB 6: LIVRES & BIBLIOTHÈQUE ================= */}
+      {/* ========================================================
+          8. LIVRES (BIBLIOTHÈQUE STRATÉGIQUE)
+         ======================================================== */}
       {subTab === 'books' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span className="system-window-title">BIBLIOTHÈQUE STRATÉGIQUE</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="omni-card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>BIBLIOTHÈQUE STRATÉGIQUE</div>
+              <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Livres de transformation, lectures actives</div>
+            </div>
             <button
-              onClick={() => setShowAddBook(!showAddBook)}
-              style={{ background: 'none', border: 'none', color: 'var(--border-cyan)', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+              onClick={() => setShowAddBook(true)}
+              className="haptic-btn"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+                background: 'linear-gradient(135deg, var(--neon-cyan), var(--electric-blue))',
+                color: '#000',
+                fontWeight: 800,
+                fontSize: 11,
+                padding: '6px 12px',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer'
+              }}
             >
-              <Plus size={12} /> Nouveau Livre
+              <Plus size={14} /> Nouveau Livre
             </button>
           </div>
 
-          {showAddBook && (
-            <div className="neuro-card" style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <input 
-                type="text" 
-                placeholder="Titre du livre" 
-                value={newBookTitle}
-                onChange={(e) => setNewBookTitle(e.target.value)}
-                style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 4, color: '#fff', padding: '6px', fontSize: 11 }}
-              />
-              <input 
-                type="text" 
-                placeholder="Auteur" 
-                value={newBookAuthor}
-                onChange={(e) => setNewBookAuthor(e.target.value)}
-                style={{ background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 4, color: '#fff', padding: '6px', fontSize: 11 }}
-              />
-              <div style={{ display: 'flex', gap: 6 }}>
-                <input 
-                  type="number" 
-                  placeholder="Pages totales" 
-                  value={newBookPages}
-                  onChange={(e) => setNewBookPages(e.target.value)}
-                  style={{ width: 100, background: 'rgba(0,0,0,0.4)', border: '1px solid var(--border-cyan-dim)', borderRadius: 4, color: '#fff', padding: '6px', fontSize: 11 }}
-                />
-                <button onClick={handleCreateBook} className="btn-monarch" style={{ fontSize: 10, padding: '6px 12px' }}>
-                  Ajouter
-                </button>
-              </div>
-            </div>
-          )}
-
-          {(books || []).map(b => (
-            <div key={b.id} className="neuro-card" style={{ padding: '12px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 6 }}>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#fff' }}>{b.title}</div>
-                  <div style={{ fontSize: 10, color: 'var(--text-dim)' }}>{b.author}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {(books || []).map(b => (
+              <div key={b.id} className="omni-card" style={{ padding: '12px 14px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-main)' }}>{b.title}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{b.author}</div>
+                  </div>
+                  <span style={{ fontSize: 10, fontWeight: 800, color: b.status === 'TERMINE' ? 'var(--neon-green)' : 'var(--neon-cyan)' }}>
+                    {b.currentPage || 0} / {b.totalPages} p.
+                  </span>
                 </div>
-                <span style={{ fontSize: 10, color: b.currentPage >= b.totalPages ? 'var(--neon-green)' : 'var(--gold)', fontFamily: 'var(--font-hud)', fontWeight: 700 }}>
-                  {b.currentPage >= b.totalPages ? '✓ TERMINÉ' : `${b.currentPage || 0}/${b.totalPages} p.`}
-                </span>
+
+                <div className="progress-bar-hud" style={{ height: 4, borderRadius: 2, margin: '8px 0' }}>
+                  <div
+                    className="progress-fill-hud"
+                    style={{
+                      width: `${Math.min(100, Math.round(((b.currentPage || 0) / (b.totalPages || 1)) * 100))}%`,
+                      background: 'linear-gradient(90deg, var(--neon-cyan), var(--electric-blue))'
+                    }}
+                  />
+                </div>
               </div>
-              <div className="hud-bar-container" style={{ height: 6 }}>
-                <div className="hud-bar-fill" style={{ width: `${Math.min(100, ((b.currentPage || 0) / (b.totalPages || 1)) * 100)}%` }} />
-              </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ================= SUB TAB 7: SAUVEGARDE & RESTAURATION ================= */}
-      {subTab === 'backup' && (
+      {/* ========================================================
+          9. PARAMÈTRES & IDENTITÉ (100% HORS-LIGNE)
+         ======================================================== */}
+      {subTab === 'settings' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div className="neuro-card" style={{ padding: '14px' }}>
-            <span className="system-window-title" style={{ display: 'block', marginBottom: 6 }}>
-              SOUVERAINETÉ ET SAUVEGARDE DES DONNÉES
-            </span>
-            <p style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 12 }}>
-              Toutes vos données (XP, finances, projets, prières, contrats) sont stockées <strong>exclusivement en local sur cet appareil</strong>. Aucun serveur tiers n'y a accès.
-            </p>
+          {/* Nom de code & profil */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--neon-cyan)', marginBottom: 8 }}>
+              IDENTITÉ DU CHASSEUR
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 10 }}>
+              <input
+                type="text"
+                placeholder="Nom de code (ex: Sung Jin-woo, Hunter, etc.)"
+                value={codenameInput}
+                onChange={(e) => setCodenameInput(e.target.value)}
+                style={{ flex: 1, padding: '8px 10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11 }}
+              />
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginBottom: 10 }}>
+              <div>
+                <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>DATE DE NAISSANCE (ASTRE)</label>
+                <input
+                  type="date"
+                  value={birthDate}
+                  onChange={(e) => setBirthDate(e.target.value)}
+                  style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>PRIÈRE DU LUNDI</label>
+                <input
+                  type="time"
+                  value={mondayPrayerTime}
+                  onChange={(e) => setMondayPrayerTime(e.target.value)}
+                  style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                />
+              </div>
+            </div>
+
+            <button
+              onClick={handleSaveSettings}
+              className="haptic-btn"
+              style={{
+                width: '100%',
+                padding: '8px 0',
+                background: 'linear-gradient(135deg, var(--neon-cyan), var(--electric-blue))',
+                color: '#000',
+                fontWeight: 800,
+                fontSize: 11,
+                borderRadius: 6,
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              Enregistrer les Paramètres
+            </button>
+          </div>
+
+          {/* Déclaration de rechute NoFap */}
+          <div className="omni-card" style={{ padding: '14px', borderLeft: '3px solid var(--accent-red)' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent-red)', marginBottom: 4 }}>
+              DÉCLARATION SOLENNELLE DE RECHUTE (NOFAP)
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 8 }}>
+              Streak actuel : <strong style={{ color: 'var(--text-main)' }}>{player.streakNoFap} jours</strong> (Record : {player.recordNoFap} j). Si vous avez trébuché, réinitialisez solennellement votre compteur.
+            </p>
+            <button
+              onClick={handleDeclareRelapse}
+              className="haptic-btn"
+              style={{
+                padding: '6px 12px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                border: '1px solid var(--accent-red)',
+                color: 'var(--accent-red)',
+                fontWeight: 700,
+                fontSize: 10,
+                borderRadius: 6,
+                cursor: 'pointer'
+              }}
+            >
+              Déclarer une Rechute
+            </button>
+          </div>
+
+          {/* Sauvegarde & Restauration Locale */}
+          <div className="omni-card" style={{ padding: '14px' }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-main)', marginBottom: 4 }}>
+              SAUVEGARDE & RESTAURATION (100% HORS-LIGNE)
+            </div>
+            <p style={{ fontSize: 10, color: 'var(--text-muted)', marginBottom: 10 }}>
+              Vos données restent 100% privées sur votre appareil. Exportez régulièrement un fichier JSON pour sécuriser votre progression.
+            </p>
+            <div style={{ display: 'flex', gap: 8 }}>
               <button
                 onClick={handleExport}
-                className="btn-monarch"
-                style={{ padding: '10px', fontSize: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                className="haptic-btn"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                  padding: '8px 0',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'var(--neon-cyan)',
+                  border: '1px solid rgba(0,217,255,0.3)',
+                  borderRadius: 6,
+                  fontWeight: 700,
+                  fontSize: 11,
+                  cursor: 'pointer'
+                }}
               >
-                <Download size={16} /> EXPORTER LA SAUVEGARDE COMPLÈTE (JSON)
+                <Download size={14} /> Exporter JSON
               </button>
 
-              <label style={{
-                background: 'rgba(0,0,0,0.5)',
-                border: '1px solid var(--border-cyan-dim)',
-                borderRadius: 8,
-                padding: '10px',
-                textAlign: 'center',
-                color: 'var(--border-cyan)',
-                fontFamily: 'var(--font-hud)',
-                fontSize: 12,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6
-              }}>
-                <Upload size={16} /> RESTAURER DEPUIS UN FICHIER JSON
+              <label
+                className="haptic-btn"
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                  padding: '8px 0',
+                  background: 'rgba(255,255,255,0.06)',
+                  color: 'var(--neon-green)',
+                  border: '1px solid rgba(34,197,94,0.3)',
+                  borderRadius: 6,
+                  fontWeight: 700,
+                  fontSize: 11,
+                  cursor: 'pointer'
+                }}
+              >
+                <Upload size={14} /> Importer JSON
                 <input type="file" accept=".json" onChange={handleFileImport} style={{ display: 'none' }} />
               </label>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL CRÉATION / MODIFICATION DE COMPÉTENCE
+         ======================================================== */}
+      {showSkillModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 9999
+        }}>
+          <div className="omni-card" style={{ width: '100%', maxWidth: 400, padding: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--neon-cyan)', marginBottom: 12 }}>
+              {editSkillId ? 'Modifier la Compétence' : 'Nouvelle Compétence'}
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input
+                type="text"
+                placeholder="Nom (ex: Anglais des affaires, React Native, BRVM...)"
+                value={skillName}
+                onChange={(e) => setSkillName(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+              />
+
+              <select
+                value={skillCategory}
+                onChange={(e) => setSkillCategory(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11 }}
+              >
+                {SKILL_CATEGORIES.map(c => (
+                  <option key={c.id} value={c.id}>{c.label}</option>
+                ))}
+              </select>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>NIVEAU ACTUEL (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={skillLevel}
+                    onChange={(e) => setSkillLevel(e.target.value)}
+                    style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>CIBLE (0-100)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={skillTargetLevel}
+                    onChange={(e) => setSkillTargetLevel(e.target.value)}
+                    style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>ÉCHÉANCE CIBLE</label>
+                <input
+                  type="date"
+                  value={skillTargetDate}
+                  onChange={(e) => setSkillTargetDate(e.target.value)}
+                  style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  onClick={() => setShowSkillModal(false)}
+                  style={{ flex: 1, padding: '8px 0', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleSaveSkill}
+                  style={{ flex: 1, padding: '8px 0', background: 'linear-gradient(135deg, var(--neon-cyan), var(--electric-blue))', color: '#000', border: 'none', borderRadius: 6, fontWeight: 800, fontSize: 11, cursor: 'pointer' }}
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL AJOUT TÂCHE CALENDRIER
+         ======================================================== */}
+      {showCalendarTaskModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 9999
+        }}>
+          <div className="omni-card" style={{ width: '100%', maxWidth: 380, padding: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--neon-cyan)', marginBottom: 12 }}>
+              Nouvelle Échéance / Tâche Calendrier
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input
+                type="text"
+                placeholder="Libellé de la tâche ou de l'échéance..."
+                value={calendarTaskTitle}
+                onChange={(e) => setCalendarTaskTitle(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+              />
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>DATE</label>
+                  <input
+                    type="date"
+                    value={calendarTaskDate}
+                    onChange={(e) => setCalendarTaskDate(e.target.value)}
+                    style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>PRIORITÉ</label>
+                  <select
+                    value={calendarTaskPriority}
+                    onChange={(e) => setCalendarTaskPriority(e.target.value)}
+                    style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11 }}
+                  >
+                    <option value="CRITIQUE">CRITIQUE</option>
+                    <option value="HAUTE">HAUTE</option>
+                    <option value="MOYENNE">MOYENNE</option>
+                    <option value="FAIBLE">FAIBLE</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  onClick={() => setShowCalendarTaskModal(false)}
+                  style={{ flex: 1, padding: '8px 0', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={handleAddCalendarTask}
+                  style={{ flex: 1, padding: '8px 0', background: 'linear-gradient(135deg, var(--neon-cyan), var(--electric-blue))', color: '#000', border: 'none', borderRadius: 6, fontWeight: 800, fontSize: 11, cursor: 'pointer' }}
+                >
+                  Enregistrer
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================
+          MODAL AJOUT LIVRE
+         ======================================================== */}
+      {showAddBook && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.85)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: 16,
+          zIndex: 9999
+        }}>
+          <div className="omni-card" style={{ width: '100%', maxWidth: 360, padding: 18 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--neon-cyan)', marginBottom: 12 }}>
+              Ajouter un Nouveau Livre
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <input
+                type="text"
+                placeholder="Titre du livre..."
+                value={newBookTitle}
+                onChange={(e) => setNewBookTitle(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+              />
+
+              <input
+                type="text"
+                placeholder="Auteur..."
+                value={newBookAuthor}
+                onChange={(e) => setNewBookAuthor(e.target.value)}
+                style={{ width: '100%', padding: '8px 10px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+              />
+
+              <div>
+                <label style={{ fontSize: 9, color: 'var(--text-dim)', display: 'block', marginBottom: 2 }}>TOTAL DE PAGES</label>
+                <input
+                  type="number"
+                  value={newBookPages}
+                  onChange={(e) => setNewBookPages(e.target.value)}
+                  style={{ width: '100%', padding: '7px 8px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 6, color: '#fff', fontSize: 11, boxSizing: 'border-box' }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                <button
+                  onClick={() => setShowAddBook(false)}
+                  style={{ flex: 1, padding: '8px 0', background: 'rgba(255,255,255,0.06)', color: 'var(--text-muted)', border: 'none', borderRadius: 6, fontSize: 11, cursor: 'pointer' }}
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => {
+                    if (!newBookTitle.trim()) return;
+                    sound.playClick();
+                    if (onAddBook) {
+                      onAddBook({
+                        id: 'book_' + Date.now(),
+                        title: newBookTitle.trim(),
+                        author: newBookAuthor.trim() || 'Auteur',
+                        totalPages: parseInt(newBookPages, 10) || 200,
+                        currentPage: 0,
+                        status: 'A_LIRE'
+                      });
+                      onAddXp(10, 'INT');
+                    }
+                    setNewBookTitle('');
+                    setNewBookAuthor('');
+                    setShowAddBook(false);
+                  }}
+                  style={{ flex: 1, padding: '8px 0', background: 'linear-gradient(135deg, var(--neon-cyan), var(--electric-blue))', color: '#000', border: 'none', borderRadius: 6, fontWeight: 800, fontSize: 11, cursor: 'pointer' }}
+                >
+                  Ajouter
+                </button>
+              </div>
             </div>
           </div>
         </div>
