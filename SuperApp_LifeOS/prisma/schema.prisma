@@ -1,0 +1,672 @@
+// Life OS — Prisma schema
+// Devise principale : FCFA (XOF), montants en entiers.
+// SQLite : pas d'enums Prisma → champs String validés au niveau applicatif.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Utilisateur & réglages
+// ---------------------------------------------------------------------------
+
+model User {
+  id         String   @id @default(cuid())
+  authUserId String?  @unique
+  email      String   @unique
+  name       String?
+  avatarUrl  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  settings        Setting?
+  accounts        Account[]
+  transactions    Transaction[]
+  categories      Category[]
+  charges         RecurringCharge[]
+  envelopes       Envelope[]
+  lifeAreas       LifeArea[]
+  yearPlans       YearPlan[]
+  goals           Goal[]
+  projects        Project[]
+  assets          Asset[]
+  liabilities     Liability[]
+  positions       InvestmentPosition[]
+  copyTrading     CopyTradingAccount[]
+  otherInvest     OtherInvestment[]
+  businesses      Business[]
+  healthMetrics   HealthMetric[]
+  skills          Skill[]
+  snapshots       MonthlySnapshot[]
+  actions         ActionItem[]
+  notes           Note[]
+  memberships     CoupleMember[]
+  sentInvitations CoupleInvitation[]   @relation("InvitedBy")
+  incomeSources   IncomeSource[]
+  fundAllocations FundAllocation[]
+  auditEvents     AuditEvent[]
+}
+
+// Un espace correspond au foyer du couple. Les droits sont portes par le
+// membre afin que l'identite d'authentification reste separee des donnees.
+model CoupleSpace {
+  id        String   @id @default(cuid())
+  name      String   @default("Notre foyer")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members         CoupleMember[]
+  invitations     CoupleInvitation[]
+  settings        HouseholdSetting?
+  incomeSources   IncomeSource[]
+  dependents      Dependent[]
+  fundAllocations FundAllocation[]
+  auditEvents     AuditEvent[]
+  snapshots       MonthlySnapshot[]
+}
+
+// Journal append-only des changements effectues depuis l'application.
+model AuditEvent {
+  id        String   @id @default(cuid())
+  coupleId  String
+  actorId   String
+  entity    String
+  action    String
+  targetId  String?
+  summary   String?
+  createdAt DateTime @default(now())
+
+  couple CoupleSpace @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  actor  User        @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([coupleId, createdAt])
+  @@index([actorId, createdAt])
+}
+
+// Parametres financiers communs : tous les membres du foyer calculent les
+// memes capacites, marges et objectifs de securite.
+model HouseholdSetting {
+  id                  String   @id @default(cuid())
+  coupleId            String   @unique
+  currency            String   @default("XOF")
+  emergencyFundMonths Int      @default(3)
+  safetyMargin        Int      @default(0)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  couple CoupleSpace @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+}
+
+// Une source par revenu attendu permet de rendre visible qui finance quoi,
+// sans confondre prevision mensuelle et transactions reellement encaissees.
+model IncomeSource {
+  id            String   @id @default(cuid())
+  coupleId      String
+  createdById   String
+  label         String
+  kind          String   @default("SALARY") // SALARY | BUSINESS | OTHER
+  monthlyAmount Int      @default(0)
+  active        Boolean  @default(true)
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  couple    CoupleSpace @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  createdBy User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([coupleId, active])
+}
+
+model Dependent {
+  id           String    @id @default(cuid())
+  coupleId     String
+  name         String
+  relationship String?
+  birthDate    DateTime?
+  active       Boolean   @default(true)
+  notes        String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  couple CoupleSpace @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, active])
+}
+
+// Roles : ADMIN | MEMBER. Statuts : ACTIVE | SUSPENDED.
+model CoupleMember {
+  id        String   @id @default(cuid())
+  coupleId  String
+  userId    String   @unique
+  role      String   @default("MEMBER")
+  status    String   @default("ACTIVE")
+  joinedAt  DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  couple          CoupleSpace         @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  user            User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  permissions     FeaturePermission[]
+  itemPermissions ItemPermission[]
+
+  @@unique([coupleId, userId])
+}
+
+// Niveaux d'acces : NONE | VIEW | EDIT.
+model FeaturePermission {
+  id        String   @id @default(cuid())
+  memberId  String
+  feature   String
+  access    String   @default("VIEW")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  member CoupleMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, feature])
+}
+
+// Le profil portant cet e-mail rejoint l'espace a sa premiere connexion.
+model CoupleInvitation {
+  id          String    @id @default(cuid())
+  coupleId    String
+  email       String
+  name        String?
+  role        String    @default("MEMBER")
+  status      String    @default("PENDING")
+  invitedById String
+  token       String    @unique @default(cuid())
+  expiresAt   DateTime?
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  couple    CoupleSpace @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  invitedBy User        @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: Cascade)
+
+  @@unique([coupleId, email])
+}
+
+// Exception par element : mariage visible, autre projet masque, par exemple.
+model ItemPermission {
+  id           String   @id @default(cuid())
+  memberId     String
+  resourceType String
+  resourceId   String
+  access       String   @default("VIEW")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  member CoupleMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([memberId, resourceType, resourceId])
+}
+
+model Setting {
+  id                  String   @id @default(cuid())
+  user                User     @relation(fields: [userId], references: [id])
+  userId              String   @unique
+  currency            String   @default("XOF")
+  salaryMonthly       Int      @default(0) // revenu saisi par le foyer
+  emergencyFundMonths Int      @default(3) // cible fonds d'urgence (mois de dépenses essentielles)
+  safetyMargin        Int      @default(10000) // marge de sécurité non mobilisable
+  mode                String   @default("simple") // simple | analyse
+  defaultAccountId    String? // compte par défaut pour la saisie rapide
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Comptes & transactions (source de vérité)
+// ---------------------------------------------------------------------------
+
+model Account {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String
+  name           String
+  type           String   @default("BANK") // CASH | MOBILE_MONEY | BANK | SAVINGS | BRVM | COPY_TRADING | BUSINESS | OTHER
+  currency       String   @default("XOF")
+  initialBalance Int      @default(0)
+  institution    String?
+  archived       Boolean  @default(false)
+  visibility     String   @default("SHARED")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  transactions    Transaction[]
+  transactionsTo  Transaction[]     @relation("transfersTo")
+  charges         RecurringCharge[]
+  fundAllocations FundAllocation[]
+}
+
+// Types de transaction :
+// INCOME, EXPENSE, DONATION, INVESTMENT, TRANSFER, ASSET_BUY, ASSET_SELL,
+// DIVIDEND, WITHDRAWAL, DEPOSIT, PROJECT, ADJUSTMENT
+model Transaction {
+  id          String   @id @default(cuid())
+  user        User     @relation(fields: [userId], references: [id])
+  userId      String
+  accountId   String
+  toAccountId String? // destination pour TRANSFER
+  type        String
+  amount      Int // toujours positif ; le sens dépend du type
+  fee         Int      @default(0) // frais (ex : frais de transfert → dépense réelle)
+  date        DateTime @default(now())
+  categoryId  String?
+  category    String? // libellé catégorie dénormalisé pour lisibilité
+  subCategory String?
+  description String?
+  projectId   String?
+  goalId      String?
+  positionId  String? // ligne BRVM concernée
+  recurring   Boolean  @default(false)
+  visibility  String   @default("SHARED")
+  receiptNote String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  account   Account  @relation(fields: [accountId], references: [id])
+  accountTo Account? @relation("transfersTo", fields: [toAccountId], references: [id])
+}
+
+model Category {
+  id            String   @id @default(cuid())
+  user          User     @relation(fields: [userId], references: [id])
+  userId        String
+  name          String
+  kind          String   @default("EXPENSE") // EXPENSE | INCOME | INVESTMENT | DONATION
+  icon          String?
+  visibility    String   @default("SHARED")
+  essential     Boolean  @default(false) // charge essentielle (fonds d'urgence, reste à vivre)
+  budgetMonthly Int? // budget prévisionnel mensuel
+  createdAt     DateTime @default(now())
+
+  charges   RecurringCharge[]
+  envelopes Envelope[]
+}
+
+// ---------------------------------------------------------------------------
+// Charges récurrentes & provisions
+// ---------------------------------------------------------------------------
+
+model RecurringCharge {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  label       String
+  amount      Int // montant par échéance
+  frequency   String    @default("MONTHLY") // MONTHLY | QUARTERLY | ANNUAL | CUSTOM
+  nextDueDate DateTime?
+  categoryId  String?
+  accountId   String?
+  active      Boolean   @default(true)
+  provision   Boolean   @default(false) // provision mensuelle activée
+  provisioned Int       @default(0) // cumul provisionné (argent réservé)
+  notes       String?
+  visibility  String    @default("SHARED")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id])
+  account  Account?  @relation(fields: [accountId], references: [id])
+}
+
+// ---------------------------------------------------------------------------
+// Budget & enveloppes
+// ---------------------------------------------------------------------------
+
+model Envelope {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  name       String
+  group      String   @default("OBLIGATOIRE") // OBLIGATOIRE | SECURITE | PROJETS | INVESTISSEMENT | PERSONNEL
+  budget     Int      @default(0) // budget mensuel
+  reserved   Int      @default(0) // montant réservé/provisionné cumulatif
+  order      Int      @default(0)
+  visibility String   @default("SHARED")
+  targetId   String? // rattachement projet/objectif optionnel
+  categoryId String? // catégorie réelle suivie par cette enveloppe
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+
+  @@index([categoryId])
+}
+
+// ---------------------------------------------------------------------------
+// Vision & objectifs
+// ---------------------------------------------------------------------------
+
+model LifeArea {
+  id         String  @id @default(cuid())
+  user       User    @relation(fields: [userId], references: [id])
+  userId     String
+  name       String
+  icon       String?
+  color      String?
+  order      Int     @default(0)
+  visibility String  @default("SHARED")
+}
+
+model YearPlan {
+  id               String  @id @default(cuid())
+  user             User    @relation(fields: [userId], references: [id])
+  userId           String
+  year             Int
+  vision           String? // vision de l'année
+  targetIncome     Int? // revenu cible annuel
+  targetNetWorth   Int? // patrimoine cible
+  targetSavings    Int? // épargne cible
+  targetInvestment Int? // investissements cibles
+  majorProjects    String? // projets majeurs (texte)
+  skillsFocus      String?
+  healthFocus      String?
+  familyFocus      String?
+  realEstateFocus  String?
+  notes            String?
+  visibility       String  @default("SHARED")
+
+  @@unique([userId, year])
+}
+
+// Priorités : CRITIQUE | HAUTE | MOYENNE | FAIBLE
+// Statuts : A_DEFINIR | A_PLANIFIER | PLANIFIE | EN_COURS | EN_RETARD | BLOQUE | TERMINE | REPORTE | ANNULE
+model Goal {
+  id             String    @id @default(cuid())
+  user           User      @relation(fields: [userId], references: [id])
+  userId         String
+  title          String
+  description    String?
+  area           String? // domaine de vie (libellé)
+  category       String?
+  year           Int?
+  priority       String    @default("MOYENNE")
+  status         String    @default("A_PLANIFIER")
+  startDate      DateTime?
+  targetDate     DateTime?
+  targetValue    Float?
+  currentValue   Float     @default(0)
+  unit           String?
+  budget         Int? // budget prévisionnel (null = à estimer)
+  funded         Int       @default(0) // montant financé (sécurisé/affecté)
+  committed      Int       @default(0) // montant engagé
+  notes          String?
+  parentGoalId   String?
+  isSuggested    Boolean   @default(false)
+  suggestedState String? // PENDING | ACCEPTED | REFUSED | POSTPONED
+  visibility     String    @default("SHARED")
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  fundAllocations FundAllocation[]
+}
+
+// ---------------------------------------------------------------------------
+// Projets & financement
+// ---------------------------------------------------------------------------
+
+model Project {
+  id               String    @id @default(cuid())
+  user             User      @relation(fields: [userId], references: [id])
+  userId           String
+  name             String
+  description      String?
+  budget           Int? // null = À estimer
+  targetDate       DateTime?
+  priority         String    @default("HAUTE")
+  status           String    @default("PLANIFIE")
+  physicalProgress Int       @default(0) // 0-100
+  icon             String?
+  notes            String?
+  archived         Boolean   @default(false)
+  visibility       String    @default("SHARED")
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  milestones      Milestone[]
+  fundAllocations FundAllocation[]
+}
+
+// Argent reserve sur un compte existant. Une allocation ne cree ni revenu ni
+// depense : elle reduit uniquement l'argent encore librement disponible.
+model FundAllocation {
+  id          String    @id @default(cuid())
+  coupleId    String
+  createdById String
+  accountId   String
+  projectId   String?
+  goalId      String?
+  amount      Int
+  status      String    @default("ACTIVE") // ACTIVE | RELEASED
+  note        String?
+  releasedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  couple    CoupleSpace @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+  createdBy User        @relation(fields: [createdById], references: [id], onDelete: Restrict)
+  account   Account     @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  project   Project?    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  goal      Goal?       @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([coupleId, status])
+  @@index([accountId, status])
+  @@index([projectId, status])
+  @@index([goalId, status])
+}
+
+model Milestone {
+  id         String    @id @default(cuid())
+  projectId  String
+  title      String
+  targetDate DateTime?
+  amount     Int? // coût estimé du jalon
+  done       Boolean   @default(false)
+  order      Int       @default(0)
+  createdAt  DateTime  @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Patrimoine
+// ---------------------------------------------------------------------------
+
+model Asset {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  name       String
+  type       String   @default("OTHER") // CASH | BANK | LAND | HOUSE | CAR | MOTO | BRVM | BUSINESS | OTHER
+  value      Int      @default(0)
+  notes      String?
+  visibility String   @default("SHARED")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+model Liability {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  name       String
+  amount     Int      @default(0)
+  type       String   @default("DEBT") // DEBT | CREDIT | COMMITMENT
+  notes      String?
+  visibility String   @default("SHARED")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Investissements
+// ---------------------------------------------------------------------------
+
+// Portefeuille BRVM réel
+model InvestmentPosition {
+  id           String    @id @default(cuid())
+  user         User      @relation(fields: [userId], references: [id])
+  userId       String
+  company      String
+  ticker       String?
+  quantity     Float     @default(0)
+  avgBuyPrice  Float     @default(0)
+  feesPaid     Int       @default(0)
+  currentPrice Float     @default(0)
+  dividends    Int       @default(0) // dividendes cumulés reçus
+  buyDate      DateTime?
+  active       Boolean   @default(true)
+  notes        String?
+  visibility   String    @default("SHARED")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model CopyTradingAccount {
+  id               String   @id @default(cuid())
+  user             User     @relation(fields: [userId], references: [id])
+  userId           String
+  name             String
+  platform         String?
+  capitalDeposited Int      @default(0)
+  withdrawn        Int      @default(0)
+  currentValue     Int      @default(0)
+  fees             Int      @default(0)
+  notes            String?
+  visibility       String   @default("SHARED")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model OtherInvestment {
+  id             String   @id @default(cuid())
+  user           User     @relation(fields: [userId], references: [id])
+  userId         String
+  name           String
+  type           String   @default("OTHER") // REAL_ESTATE | BUSINESS | PLACEMENT | OTHER
+  initialCapital Int      @default(0)
+  contributions  Int      @default(0)
+  withdrawals    Int      @default(0)
+  income         Int      @default(0)
+  expenses       Int      @default(0)
+  currentValue   Int      @default(0)
+  risk           String   @default("MOYEN") // FAIBLE | MOYEN | ELEVE
+  notes          String?
+  visibility     String   @default("SHARED")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Business {
+  id              String    @id @default(cuid())
+  user            User      @relation(fields: [userId], references: [id])
+  userId          String
+  name            String
+  capitalInvested Int       @default(0)
+  revenue         Int       @default(0)
+  charges         Int       @default(0)
+  launchDate      DateTime?
+  status          String    @default("PLANIFIE") // IDEE | PLANIFIE | EN_COURS | ACTIF | PAUSE | ARRETE
+  notes           String?
+  visibility      String    @default("SHARED")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Vie (santé, compétences)
+// ---------------------------------------------------------------------------
+
+model HealthMetric {
+  id           String   @id @default(cuid())
+  user         User     @relation(fields: [userId], references: [id])
+  userId       String
+  date         DateTime @default(now())
+  weight       Float?
+  sportDone    Boolean  @default(false)
+  sportMinutes Int?
+  sleepHours   Float?
+  notes        String?
+  visibility   String   @default("SHARED")
+  createdAt    DateTime @default(now())
+}
+
+model Skill {
+  id          String    @id @default(cuid())
+  user        User      @relation(fields: [userId], references: [id])
+  userId      String
+  name        String
+  category    String? // FORMATION | CERTIFICATION | LANGUE | TECHNIQUE
+  level       Int       @default(0) // 0-100
+  targetLevel Int       @default(100)
+  targetDate  DateTime?
+  notes       String?
+  visibility  String    @default("SHARED")
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// Actions, snapshots, notes
+// ---------------------------------------------------------------------------
+
+model ActionItem {
+  id         String    @id @default(cuid())
+  user       User      @relation(fields: [userId], references: [id])
+  userId     String
+  title      String
+  done       Boolean   @default(false)
+  dueDate    DateTime?
+  goalId     String?
+  projectId  String?
+  priority   String    @default("MOYENNE")
+  visibility String    @default("SHARED")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+}
+
+model MonthlySnapshot {
+  id              String   @id @default(cuid())
+  user            User     @relation(fields: [userId], references: [id])
+  userId          String
+  coupleId        String?
+  year            Int
+  month           Int
+  income          Int      @default(0)
+  expenses        Int      @default(0)
+  savings         Int      @default(0)
+  investments     Int      @default(0)
+  netWorth        Int      @default(0)
+  brvmValue       Int      @default(0)
+  computedBalance Int?
+  realBalance     Int?
+  closed          Boolean  @default(false)
+  notes           String?
+  visibility      String   @default("SHARED")
+  createdAt       DateTime @default(now())
+
+  couple CoupleSpace? @relation(fields: [coupleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, year, month])
+  @@unique([coupleId, year, month])
+}
+
+model Note {
+  id         String   @id @default(cuid())
+  user       User     @relation(fields: [userId], references: [id])
+  userId     String
+  scope      String   @default("GENERAL") // GENERAL | DECISION | CLARIFICATION
+  title      String
+  content    String?
+  resolved   Boolean  @default(false)
+  visibility String   @default("SHARED")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}

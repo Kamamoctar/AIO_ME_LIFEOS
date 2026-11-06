@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#582900" />
+    <title>Actualisation de Life OS</title>
+    <style>
+      :root { color-scheme: light; font-family: system-ui, sans-serif; }
+      body { min-height: 100vh; margin: 0; display: grid; place-items: center; background: #fff9f6; color: #582900; }
+      main { width: min(32rem, calc(100% - 2rem)); text-align: center; }
+      .mark { width: 4rem; height: 4rem; margin: 0 auto 1rem; border-radius: 1.25rem; background: linear-gradient(135deg, #582900 0 46%, #fd6c9e 46% 72%, #77b5fe 72%); }
+      p { color: #745e50; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="mark" aria-hidden="true"></div>
+      <h1>Actualisation de Life OS…</h1>
+      <p>Le cache local est nettoyé, puis l’application va redémarrer.</p>
+    </main>
+    <script>
+      (async () => {
+        if ("serviceWorker" in navigator) {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+        }
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((key) => key.startsWith("lifeos-")).map((key) => caches.delete(key)));
+        }
+        window.location.replace("/?palette=582900-FD6C9E-77B5FE");
+      })().catch(() => window.location.replace("/?palette=582900-FD6C9E-77B5FE"));
+    </script>
+  </body>
+</html>

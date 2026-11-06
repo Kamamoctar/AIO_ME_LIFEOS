@@ -1,0 +1,33 @@
+services:
+  financeos:
+    build:
+      context: .
+      target: development
+    ports:
+      - "${FINANCEOS_PORT:-3100}:3000"
+    environment:
+      DATABASE_URL: file:/data/financeos.db
+      NEXT_TELEMETRY_DISABLED: "1"
+      CHOKIDAR_USEPOLLING: "true"
+    command:
+      - sh
+      - -c
+      - node scripts/prisma-generate.mjs && node scripts/apply-turso-migrations.mjs && exec npm run dev -- --hostname 0.0.0.0
+    volumes:
+      - .:/app
+      - financeos_node_modules:/app/node_modules
+      - financeos_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:3000/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+volumes:
+  financeos_node_modules:
+  financeos_data:
+

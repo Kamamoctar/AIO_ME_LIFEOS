@@ -1,0 +1,138 @@
+{
+  "meta": {
+    "version": 1,
+    "note": "Protocoles tels que transmis. Champs « notes » libres. Validité : se référer à son guide."
+  },
+  "priere": {
+    "methodeDefaut": "MWL",
+    "methodesDisponibles": ["MWL", "UOIF_12", "ISNA", "Egypt", "Makkah", "Karachi"],
+    "offsetManuelMinutes": { "fajr": 0, "maghrib": 0, "isha": 0 },
+    "position": {
+      "mode": "geoloc-au-1er-lancement | ville-liste-embarquee | lat-long-manuel",
+      "cacheeLocalement": true
+    }
+  },
+  "zikrs": [
+    {
+      "id": "ya_rachid",
+      "nom": "Ya-Rachid",
+      "arabe": "يَا رَشِيدُ",
+      "formule": "Ya Rachid",
+      "sens": "Ô Celui qui guide droit",
+      "quantite": 1000,
+      "nature": "cure",
+      "fenetre": { "type": "entre-prieres", "depuis": "maghrib", "jusqua": "isha" },
+      "instruction": "1000 fois entre Maghrib et Isha : les problèmes seront résolus.",
+      "notes": ""
+    },
+    {
+      "id": "ya_sabour",
+      "nom": "Ya-Sabour",
+      "arabe": "يَا صَبُورُ",
+      "formule": "Ya Sabour",
+      "sens": "Ô le Très Patient",
+      "quantite": 3000,
+      "nature": "cure",
+      "fenetre": { "type": "libre" },
+      "fractionnable": true,
+      "horizonDefaut": "libre",
+      "instruction": "3000 fois pour être secouru de difficulté.",
+      "notes": ""
+    },
+    {
+      "id": "ya_badiou",
+      "nom": "Ya-Badiou",
+      "arabe": "يَا بَدِيعُ السَّمَاوَاتِ وَالْأَرْضِ",
+      "formule": "Ya Badiou as-Samawati wal-Ard",
+      "formuleLongue": true,
+      "sens": "Ô Créateur originel des cieux et de la terre",
+      "quantite": 70,
+      "nature": "cure",
+      "fenetre": { "type": "libre" },
+      "instruction": "70 fois de la formule complète pour voir les ennuis disparaître.",
+      "notes": ""
+    },
+    {
+      "id": "ya_matine",
+      "nom": "Ya-Matine",
+      "arabe": "يَا مَتِينُ",
+      "formule": "Ya Matine",
+      "sens": "Ô le Ferme",
+      "quantite": null,
+      "nature": "libre",
+      "fenetre": { "type": "libre" },
+      "instruction": "À répéter : les problèmes seront résolus.",
+      "notes": ""
+    },
+    {
+      "id": "ya_jabbar",
+      "nom": "Ya-Jabbar",
+      "arabe": "يَا جَبَّارُ",
+      "formule": "Ya Jabbar",
+      "sens": "Ô l'Invincible",
+      "quantite": null,
+      "nature": "libre",
+      "fenetre": { "type": "libre" },
+      "instruction": "Protège de la contrainte, de la violence, de la sévérité et de la dureté.",
+      "notes": ""
+    },
+    {
+      "id": "ya_quddus",
+      "nom": "Ya-Quddus",
+      "arabe": "يَا قُدُّوسُ",
+      "formule": "Ya Quddus",
+      "sens": "Ô le Très Saint",
+      "quantite": 100,
+      "nature": "quotidien",
+      "fenetre": { "type": "journee" },
+      "instruction": "100 fois par jour : libère le cœur de l'angoisse.",
+      "notes": ""
+    },
+    {
+      "id": "ya_aziz",
+      "nom": "Ya-Aziz",
+      "arabe": "يَا عَزِيزُ",
+      "formule": "Ya Aziz",
+      "sens": "Ô le Tout-Puissant",
+      "quantite": 40,
+      "nature": "protocole",
+      "dureeJours": 40,
+      "fenetre": { "type": "apres-priere", "depuis": "fajr", "dureeFenetreHeures": 2 },
+      "politiqueRupture": {
+        "options": ["rattraper", "recommencer", "dissocier-jour-manque"],
+        "defaut": "dissocier-jour-manque",
+        "editable": true
+      },
+      "instruction": "40 fois/jour après l'aube pendant 40 jours : n'aura jamais besoin des autres.",
+      "notes": "En cas de jour manqué (voyage, sommeil, indisponibilité) : régler la politique dans Réglages."
+    },
+    {
+      "id": "ya_bari",
+      "nom": "Ya-Bari",
+      "arabe": "يَا بَارِئُ",
+      "formule": "Ya Bari",
+      "sens": "Ô le Créateur sans exemple",
+      "quantite": null,
+      "nature": "libre",
+      "fenetre": { "type": "libre" },
+      "instruction": "Allah l'écartera des péchés.",
+      "notes": ""
+    },
+    {
+      "id": "ya_wahhab",
+      "nom": "Ya-Wahhab",
+      "arabe": "يَا وَهَّابُ",
+      "formule": "Ya Wahhab",
+      "sens": "Ô le Très Généreux",
+      "quantite": 7,
+      "nature": "micro-dose",
+      "fenetre": {
+        "type": "apres-priere",
+        "prieres": ["fajr", "dhuhr", "asr", "maghrib", "isha"],
+        "editable": true
+      },
+      "instruction": "7 fois après la prière : exaucement des souhaits.",
+      "notes": "Configurer sur quelle(s) prière(s)."
+    }
+  ]
+}
