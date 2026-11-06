@@ -22,4 +22,5 @@ SuperApp_LifeOS/*.apk
 *.log
 .DS_Store
 Thumbs.db
+.vscode/
 
