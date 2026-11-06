@@ -30,7 +30,14 @@ export function SpiritualView() {
   const [manualLon, setManualLon] = useState(String(data.spiritual.settings.coordinates.longitude));
   const [locationMessage, setLocationMessage] = useState("");
   const today = getTodayEntry(data);
-  const prayerDay = useMemo(() => calculatePrayerDay(now, data.spiritual.settings), [now.getFullYear(), now.getMonth(), now.getDate(), data.spiritual.settings]);
+  const dayKey = localDateKey(now);
+  const prayerDay = useMemo(() => {
+    const [year, month, day] = dayKey.split("-").map(Number);
+    return calculatePrayerDay(
+      new Date(year, month - 1, day, 12),
+      data.spiritual.settings
+    );
+  }, [dayKey, data.spiritual.settings]);
   const program = useMemo(() => resolveProgram({
     day: now,
     now,
@@ -174,7 +181,7 @@ function Tasbih({ item, count, onAdd, onReset, onClose }: { item: ProgramItem; c
     if ("vibrate" in navigator) navigator.vibrate(count + amount > 0 && (count + amount) % 33 === 0 ? [35, 45, 35] : 15);
   };
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col bg-[#120d08] p-4 text-[#fff7ea] sm:p-6">
+    <div className="safe-screen fixed inset-0 z-[100] flex flex-col bg-[#120d08] p-4 text-[#fff7ea] sm:p-6">
       <div className="mx-auto flex w-full max-w-2xl items-center justify-between"><button onClick={onClose} className="grid size-10 place-items-center rounded-xl bg-white/5"><X className="size-5" /></button><div className="text-center"><p className="text-[10px] uppercase tracking-[.2em] text-amber-300">Tasbih</p><p className="font-semibold">{item.zikr.nom}</p></div><button onClick={onReset} className="grid size-10 place-items-center rounded-xl bg-white/5" aria-label="Réinitialiser"><RotateCcw className="size-4" /></button></div>
       <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col items-center justify-center">
         <p className="arabic max-w-xl text-center text-4xl leading-relaxed sm:text-6xl" lang="ar">{item.zikr.arabe}</p>

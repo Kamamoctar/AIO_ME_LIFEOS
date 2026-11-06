@@ -15,8 +15,7 @@ import { CalendarDays, Compass, HeartPulse, MoonStar, Search, ShieldAlert, Spark
 export function DestinyView() {
   const { data, setBirthDate } = useUnifiedModules();
   const [intent, setIntent] = useState("prendre une décision importante");
-  const now = new Date();
-  const profile = useMemo(() => evaluateDestiny(now, data.destiny.birthDate), [data.destiny.birthDate, now.getDate(), now.getHours()]);
+  const profile = evaluateDestiny(new Date(), data.destiny.birthDate);
   const planned = useMemo(() => planDestinyDays(intent, data.destiny.birthDate, 45).slice(0, 8), [intent, data.destiny.birthDate]);
 
   return (

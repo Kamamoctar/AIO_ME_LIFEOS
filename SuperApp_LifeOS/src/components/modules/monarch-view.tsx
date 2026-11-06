@@ -135,8 +135,8 @@ const PANIC_STEPS = [
 function PanicProtocol({ step, onStep, onClose, onWin, onRelapse }: { step: number; onStep: (step: number) => void; onClose: () => void; onWin: () => void; onRelapse: () => void }) {
   const current = PANIC_STEPS[step];
   return (
-    <div className="fixed inset-0 z-[100] grid place-items-center bg-slate-950/95 p-4 text-white">
-      <button onClick={onClose} className="absolute right-4 top-4 rounded-full p-2 text-slate-300 hover:bg-white/10" aria-label="Fermer"><X className="size-6" /></button>
+    <div className="safe-screen fixed inset-0 z-[100] grid place-items-center bg-slate-950/95 p-4 text-white">
+      <button onClick={onClose} className="safe-top-offset absolute right-4 rounded-full p-2 text-slate-300 hover:bg-white/10" aria-label="Fermer"><X className="size-6" /></button>
       <div className="w-full max-w-lg text-center">
         <div className="mx-auto grid size-24 place-items-center rounded-full border-4 border-violet-400/40 bg-violet-400/10"><Shield className="size-11 text-violet-300" /></div>
         <p className="mt-6 text-xs font-semibold uppercase tracking-[.25em] text-violet-300">Étape {step + 1}/{PANIC_STEPS.length}</p>

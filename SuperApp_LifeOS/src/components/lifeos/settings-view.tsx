@@ -20,7 +20,8 @@ import {
 import { Settings, Download, Upload, Trash2, Plus, Tags, HelpCircle, CheckCircle2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CoupleSettings } from "@/components/lifeos/couple-settings";
-import { useUnifiedModules, type UnifiedModulesState } from "@/lib/modules/store";
+import { useUnifiedModules } from "@/lib/modules/store";
+import { createLifeOSBackup, parseLifeOSBackup } from "@/lib/lifeos/backup";
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
   account: "compte",
@@ -73,13 +74,8 @@ export function SettingsView() {
     try {
       const res = await fetch("/api/export");
       const finance = await res.json();
-      const backup = {
-        format: "lifeos-full-backup",
-        version: 1,
-        exportedAt: new Date().toISOString(),
-        finance,
-        modules: moduleState,
-      };
+      if (!res.ok) throw new Error("Export financier impossible");
+      const backup = createLifeOSBackup(finance, moduleState);
       const blob = new Blob([JSON.stringify(backup, null, 2)], {
         type: "application/json",
       });
@@ -106,28 +102,25 @@ export function SettingsView() {
 
   const doImport = async (file: File) => {
     const text = await file.text();
-    let financePayload = text;
+    let parsed: ReturnType<typeof parseLifeOSBackup>;
     try {
-      const parsed = JSON.parse(text) as {
-        format?: string;
-        finance?: unknown;
-        modules?: UnifiedModulesState;
-      };
-      if (parsed.format === "lifeos-full-backup" && parsed.finance && parsed.modules) {
-        financePayload = JSON.stringify(parsed.finance);
-        replaceModuleState(parsed.modules);
-      }
-    } catch {
-      toast({ title: "Import échoué", description: "Le fichier JSON est invalide.", variant: "destructive" });
+      parsed = parseLifeOSBackup(text);
+    } catch (error) {
+      toast({
+        title: "Import échoué",
+        description: error instanceof Error ? error.message : "Le fichier JSON est invalide.",
+        variant: "destructive",
+      });
       return;
     }
     const res = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: financePayload,
+      body: JSON.stringify(parsed.finance),
     });
     const json = await res.json();
     if (res.ok) {
+      if (parsed.modules) replaceModuleState(parsed.modules);
       toast({ title: "Import réussi", description: "Tes données ont été restaurées." });
       await useLifeOS.getState().refresh();
     } else {

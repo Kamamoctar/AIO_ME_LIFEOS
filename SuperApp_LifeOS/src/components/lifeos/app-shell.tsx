@@ -92,7 +92,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Desktop : barre latérale */}
       {/* ---------------------------------------------------------------- */}
       <div className="flex flex-1">
-        <aside className="hidden lg:flex w-60 shrink-0 flex-col border-r bg-sidebar sticky top-0 h-screen">
+        <aside className="safe-top hidden lg:flex w-60 shrink-0 flex-col border-r bg-sidebar sticky top-0 h-screen">
           <div className="flex items-center gap-2.5 px-5 pt-6 pb-4">
             <div className="brand-mark flex size-9 items-center justify-center rounded-xl text-white shadow-sm">
               <Compass className="size-5" />
@@ -147,7 +147,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         {/* -------------------------------------------------------------- */}
         <div className="flex-1 min-w-0 flex flex-col">
           {/* En-tête mobile */}
-          <header className="lg:hidden sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <header className="safe-top lg:hidden sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
             <div className="flex items-center justify-between gap-2 px-4 py-2.5">
               <div className="flex items-center gap-2 min-w-0">
                 <div className="brand-mark flex size-8 items-center justify-center rounded-lg text-white shadow-sm shrink-0">
