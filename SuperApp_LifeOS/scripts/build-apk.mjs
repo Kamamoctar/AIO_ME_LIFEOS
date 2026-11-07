@@ -42,10 +42,9 @@ function resolveAndroidJavaHome() {
   }
   const compatible = candidates
     .map((home) => ({ home, major: javaMajor(home) }))
-    .filter((candidate) => candidate.major >= 21)
-    .sort((a, b) => b.major - a.major);
+    .filter((candidate) => candidate.major === 21);
   if (!compatible.length) {
-    throw new Error("LifeOS requiert un JDK 21 ou supérieur pour compiler Capacitor Android. Définis LIFEOS_JAVA_HOME vers ce JDK.");
+    throw new Error("LifeOS requiert précisément un JDK 21 pour compiler Capacitor Android. Définis LIFEOS_JAVA_HOME vers ce JDK.");
   }
   return compatible[0];
 }
@@ -64,6 +63,11 @@ try {
     fs.renameSync(proxyFile, proxyTempFile);
     proxyMoved = true;
   }
+
+  // Le serveur de développement génère des validateurs qui référencent les
+  // routes API. Elles sont volontairement retirées du bundle APK hors ligne,
+  // donc ce cache ne doit pas participer au type-check de l'export statique.
+  fs.rmSync(path.join(root, ".next", "dev"), { recursive: true, force: true });
 
   console.log("1. Generation du bundle web statique (Next.js export)...");
   execSync("npx next build", {
