@@ -20,6 +20,7 @@ import { cn } from "@/lib/utils";
 import { todayInputDate, formatFCFA } from "@/lib/lifeos/format";
 import { useToast } from "@/hooks/use-toast";
 import type { TransactionType } from "@/lib/lifeos/types";
+import { LIFEOS_CAPTURE_EVENT } from "@/components/lifeos/universal-capture";
 
 const TYPES: {
   id: TransactionType;
@@ -36,13 +37,13 @@ const TYPES: {
 ];
 
 export function QuickAddButton() {
-  const { quickAddOpen, setQuickAddOpen, state } = useLifeOS();
+  const state = useLifeOS((store) => store.state);
   if (!state) return null;
   return (
     <button
-      onClick={() => setQuickAddOpen(true)}
+      onClick={() => window.dispatchEvent(new Event(LIFEOS_CAPTURE_EVENT))}
       className="fixed right-4 bottom-20 lg:bottom-6 z-50 flex items-center gap-1.5 rounded-full bg-primary text-primary-foreground shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all pl-3.5 pr-4 py-3 font-semibold text-sm"
-      aria-label="Ajouter une opération"
+      aria-label="Ouvrir la capture universelle"
     >
       <Plus className="size-5" />
       <span className="hidden sm:inline">Ajouter</span>

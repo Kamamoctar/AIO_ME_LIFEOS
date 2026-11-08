@@ -21,7 +21,23 @@ import { Settings, Download, Upload, Trash2, Plus, Tags, HelpCircle, CheckCircle
 import { useToast } from "@/hooks/use-toast";
 import { CoupleSettings } from "@/components/lifeos/couple-settings";
 import { useUnifiedModules } from "@/lib/modules/store";
-import { createLifeOSBackup, parseLifeOSBackup } from "@/lib/lifeos/backup";
+import { createLifeOSBackup, LIFEOS_LAST_BACKUP_KEY, parseLifeOSBackup } from "@/lib/lifeos/backup";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { LIFEOS_ONBOARDING_EVENT } from "@/components/lifeos/onboarding";
+import { SecuritySettingsCard } from "@/components/lifeos/security-settings-card";
+import { SecureTransferCard } from "@/components/lifeos/secure-transfer-card";
+import { DataDeletionCard } from "@/components/lifeos/data-deletion-card";
+
+const MAX_BACKUP_BYTES = 20 * 1024 * 1024;
 
 const AUDIT_ENTITY_LABELS: Record<string, string> = {
   account: "compte",
@@ -64,6 +80,10 @@ export function SettingsView() {
   const [catEssential, setCatEssential] = useState(false);
   // notes de clarification
   const [answer3m, setAnswer3m] = useState("");
+  const [pendingImport, setPendingImport] = useState<{
+    fileName: string;
+    parsed: Awaited<ReturnType<typeof parseLifeOSBackup>>;
+  } | null>(null);
 
   if (!state) return null;
 
@@ -75,7 +95,7 @@ export function SettingsView() {
       const res = await fetch("/api/export");
       const finance = await res.json();
       if (!res.ok) throw new Error("Export financier impossible");
-      const backup = createLifeOSBackup(finance, moduleState);
+      const backup = await createLifeOSBackup(finance, moduleState);
       const blob = new Blob([JSON.stringify(backup, null, 2)], {
         type: "application/json",
       });
@@ -87,6 +107,7 @@ export function SettingsView() {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
+      window.localStorage.setItem(LIFEOS_LAST_BACKUP_KEY, backup.exportedAt);
       toast({
         title: "Export téléchargé",
         description: "Sauvegarde JSON complète de tes données.",
@@ -100,11 +121,19 @@ export function SettingsView() {
     }
   };
 
-  const doImport = async (file: File) => {
+  const prepareImport = async (file: File) => {
+    if (file.size > MAX_BACKUP_BYTES) {
+      toast({
+        title: "Import refusé",
+        description: "La sauvegarde dépasse la limite de 20 Mo.",
+        variant: "destructive",
+      });
+      return;
+    }
     const text = await file.text();
-    let parsed: ReturnType<typeof parseLifeOSBackup>;
+    let parsed: Awaited<ReturnType<typeof parseLifeOSBackup>>;
     try {
-      parsed = parseLifeOSBackup(text);
+      parsed = await parseLifeOSBackup(text);
     } catch (error) {
       toast({
         title: "Import échoué",
@@ -113,6 +142,12 @@ export function SettingsView() {
       });
       return;
     }
+    setPendingImport({ fileName: file.name, parsed });
+  };
+
+  const confirmImport = async () => {
+    if (!pendingImport) return;
+    const { parsed } = pendingImport;
     const res = await fetch("/api/import", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -121,6 +156,7 @@ export function SettingsView() {
     const json = await res.json();
     if (res.ok) {
       if (parsed.modules) replaceModuleState(parsed.modules);
+      setPendingImport(null);
       toast({ title: "Import réussi", description: "Tes données ont été restaurées." });
       await useLifeOS.getState().refresh();
     } else {
@@ -143,6 +179,10 @@ export function SettingsView() {
       </div>
 
       <CoupleSettings />
+
+      <SecuritySettingsCard />
+
+      {state.couple?.role === "ADMIN" && <SecureTransferCard />}
 
       <SectionCard
         title="Revenus mensuels du foyer"
@@ -543,15 +583,17 @@ export function SettingsView() {
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0];
-              if (f) void doImport(f);
+              if (f) void prepareImport(f);
               e.target.value = "";
             }}
           />
         </div>
         <p className="mt-2 text-[10px] text-muted-foreground">
-          L&apos;import LifeOS remplace toutes les données actuelles. Les anciennes sauvegardes FinanceOS restent acceptées.
+          Les nouveaux exports sont protégés par une empreinte SHA-256. Les anciennes sauvegardes FinanceOS restent acceptées.
         </p>
       </SectionCard>}
+
+      {state.couple?.role === "ADMIN" && <DataDeletionCard />}
 
       {/* À propos */}
       <SectionCard title="À propos de Life OS" icon={<HelpCircle className="size-4" />}>
@@ -565,7 +607,25 @@ export function SettingsView() {
           <li>• Chaque KPI important propose « Voir le calcul ».</li>
           <li>• Les six systèmes partagent désormais une vue Aujourd&apos;hui et une sauvegarde commune.</li>
         </ul>
+        <Button className="mt-4" variant="outline" onClick={() => window.dispatchEvent(new Event(LIFEOS_ONBOARDING_EVENT))}>
+          <HelpCircle className="mr-1.5 size-4" /> Revoir la visite guidée
+        </Button>
       </SectionCard>
+
+      <AlertDialog open={pendingImport !== null} onOpenChange={(open) => { if (!open) setPendingImport(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remplacer les données actuelles ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La sauvegarde « {pendingImport?.fileName} » a été validée. Son import remplacera les données LifeOS présentes sur cet appareil. Cette action ne peut être annulée qu’avec une autre sauvegarde.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void confirmImport()}>Restaurer la sauvegarde</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

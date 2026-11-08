@@ -21,9 +21,12 @@ import {
 import { CalendarDays, Plus, Trash2, AlertTriangle, ListTodo } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LifeOSState } from "@/lib/lifeos/types";
+import { EVOLUTION_ACTIONS } from "@/data/evolution-actions";
+import { useUnifiedModules, type UnifiedModulesState } from "@/lib/modules/store";
 
 export function CalendarView() {
   const { state } = useLifeOS();
+  const modules = useUnifiedModules((store) => store.data);
   const [monthOffset, setMonthOffset] = useState(0);
   const [open, setOpen] = useState(false);
   const [title, setTitle] = useState("");
@@ -34,6 +37,7 @@ export function CalendarView() {
   return (
     <CalendarInner
       state={state}
+      modules={modules}
       monthOffset={monthOffset}
       setMonthOffset={setMonthOffset}
       open={open}
@@ -50,6 +54,7 @@ export function CalendarView() {
 
 function CalendarInner({
   state,
+  modules,
   monthOffset,
   setMonthOffset,
   open,
@@ -62,6 +67,7 @@ function CalendarInner({
   setPriority,
 }: {
   state: LifeOSState;
+  modules: UnifiedModulesState;
   monthOffset: number;
   setMonthOffset: (n: number) => void;
   open: boolean;
@@ -104,6 +110,19 @@ function CalendarInner({
       if (!a.dueDate) continue;
       const d = new Date(a.dueDate);
       if (inMonth(d)) events.push({ title: a.title, date: d, amount: null, kind: "Action", urgent: false });
+    }
+    for (const [code, schedule] of Object.entries(modules.evolution.schedules)) {
+      const action = EVOLUTION_ACTIONS.find((item) => item.code === code);
+      const d = new Date(`${schedule.nextDueDate}T12:00:00`);
+      if (inMonth(d)) {
+        events.push({
+          title: action?.action ?? code,
+          date: d,
+          amount: null,
+          kind: "Évolution",
+          urgent: d < today,
+        });
+      }
     }
     return [...events].sort((a, b) => a.date.getTime() - b.date.getTime());
   })();
@@ -150,10 +169,10 @@ function CalendarInner({
       <div>
         <h1 className="text-xl font-bold tracking-tight flex items-center gap-2">
           <CalendarDays className="size-5 text-primary" />
-          Calendrier financier
+          Calendrier LifeOS
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Échéances, charges, projets · identification des mois à forte pression financière
+          Actions, évolution, objectifs, projets et échéances financières au même endroit
         </p>
       </div>
 

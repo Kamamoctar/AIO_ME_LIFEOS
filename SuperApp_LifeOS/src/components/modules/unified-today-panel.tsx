@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Activity, CheckCircle2, MoonStar, Sparkles, Target } from "lucide-react";
+import { DashboardCustomizer, useDashboardPreferences } from "@/components/lifeos/dashboard-customizer";
 
 export function UnifiedTodayPanel() {
   const modules = useUnifiedModules();
@@ -20,32 +21,33 @@ export function UnifiedTodayPanel() {
     .filter(Boolean);
   const questDone = today.questDone.length;
   const ritualsDone = today.morningRituals.filter(Boolean).length + today.eveningRituals.filter(Boolean).length;
+  const visible = useDashboardPreferences();
 
   return (
     <section className="space-y-3" aria-label="Ma journée LifeOS">
       <div className="flex items-center justify-between gap-3">
         <div><p className="text-xs font-semibold uppercase tracking-[.16em] text-primary">Vue unifiée</p><h2 className="text-lg font-bold">Ma journée LifeOS</h2></div>
-        <Badge variant="secondary">Énergie {today.energy}/10</Badge>
+        <div className="flex items-center gap-2"><Badge variant="secondary">Énergie {today.energy}/10</Badge><DashboardCustomizer /></div>
       </div>
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-        <Card className="border-primary/30">
+        {visible.priority && <Card className="border-primary/30">
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Target className="size-4 text-primary" /> Priorité unique</CardTitle></CardHeader>
           <CardContent><p className="min-h-10 text-sm font-medium">{today.priority || "Définis ta priorité dans Système MK."}</p><Button variant="ghost" size="sm" className="mt-2 px-0" onClick={() => setView("mk")}>Ouvrir MK →</Button></CardContent>
-        </Card>
-        <Card>
+        </Card>}
+        {visible.evolution && <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Sparkles className="size-4 text-violet-500" /> Focus Évolution</CardTitle></CardHeader>
           <CardContent><p className="text-2xl font-black">{today.evolutionDone.length}/{focus.length}</p><p className="text-xs text-muted-foreground">actions accomplies · {data.evolution.xp} XP</p><Button variant="ghost" size="sm" className="mt-2 px-0" onClick={() => setView("evolution")}>Voir le trio →</Button></CardContent>
-        </Card>
-        <Card>
+        </Card>}
+        {visible.rhythm && <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><Activity className="size-4 text-amber-500" /> Quêtes & rituels</CardTitle></CardHeader>
           <CardContent><p className="text-2xl font-black">{questDone}/{initialDailyQuests.length}</p><p className="text-xs text-muted-foreground">quêtes · {ritualsDone}/8 rituels</p><Button variant="ghost" size="sm" className="mt-2 px-0" onClick={() => setView("monarch")}>Ouvrir le Royaume →</Button></CardContent>
-        </Card>
-        <Card>
+        </Card>}
+        {visible.spiritual && <Card>
           <CardHeader className="pb-2"><CardTitle className="flex items-center gap-2 text-sm"><MoonStar className="size-4 text-emerald-500" /> Présence spirituelle</CardTitle></CardHeader>
           <CardContent><p className="text-2xl font-black">{today.prayersDone.length}/5</p><p className="text-xs text-muted-foreground">prières · {Object.values(data.spiritual.dailyCounts[today.date] ?? {}).reduce((sum, value) => sum + value, 0).toLocaleString("fr-FR")} récitations</p><Button variant="ghost" size="sm" className="mt-2 px-0" onClick={() => setView("spiritual")}>Ouvrir Misbaha →</Button></CardContent>
-        </Card>
+        </Card>}
       </div>
-      {focus.length > 0 && (
+      {visible.evolution && focus.length > 0 && (
         <div className="grid gap-2 sm:grid-cols-3">
           {focus.map((action) => {
             if (!action) return null;

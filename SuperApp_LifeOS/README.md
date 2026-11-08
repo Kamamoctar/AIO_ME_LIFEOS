@@ -21,8 +21,14 @@ personnelle, gamification et spiritualité.
 - **FinanceOS Foyer** : comptes, budgets, transactions, objectifs, patrimoine,
   investissements, décisions et simulations.
 
-Les modules partagent la navigation, la page quotidienne et une sauvegarde JSON
-globale. Les données de l'APK sont conservées sur l'appareil.
+Les modules partagent la navigation, un briefing quotidien local, la recherche,
+la capture universelle, un calendrier transversal, une revue hebdomadaire et
+une sauvegarde globale. Le tableau du jour est personnalisable.
+
+Les données de l'APK sont conservées sur l'appareil. La version Android propose
+un verrou biométrique de confort, un transfert inter-appareils manuel chiffré
+par AES-256-GCM et un effacement local avec double confirmation. La phrase
+secrète de transfert n'est jamais enregistrée.
 
 ## Stack
 
@@ -52,11 +58,12 @@ npx tsc --noEmit
 ```
 
 Les tests couvrent notamment le moteur financier, les permissions du foyer, le
-catalogue Évolution, Mon Astre et les horaires/programmes spirituels.
+catalogue Évolution, Mon Astre, les horaires/programmes spirituels, le briefing
+LifeOS et le chiffrement des transferts.
 
 ## Construire l'APK
 
-Prérequis supplémentaires : Android SDK et JDK 21 ou supérieur. Le script
+Prérequis supplémentaires : Android SDK et JDK 21. Le script
 détecte automatiquement Android Studio ou un JDK compatible. La variable
 `LIFEOS_JAVA_HOME` permet de désigner explicitement le JDK si nécessaire.
 
@@ -73,6 +80,22 @@ La commande effectue successivement :
 
 L'APK, les dépendances et les sorties de build sont volontairement ignorés par
 Git. Ils doivent être reconstruits localement ou dans une chaîne CI.
+
+### APK de production signé
+
+La signature est créée une seule fois dans `.signing/`, dossier local exclu de
+Git. Il faut impérativement sauvegarder ce dossier en lieu sûr : la même clé est
+nécessaire pour toutes les futures mises à jour Android.
+
+```bash
+npm run setup:android-signing
+npm run build:apk:release
+```
+
+Le résultat signé est copié vers `LifeOS-release.apk`. Les quatre variables
+`LIFEOS_KEYSTORE_PATH`, `LIFEOS_KEYSTORE_PASSWORD`, `LIFEOS_KEY_ALIAS` et
+`LIFEOS_KEY_PASSWORD` permettent aussi d'utiliser une signature conservée hors
+du projet, par exemple dans un coffre CI.
 
 ## Structure principale
 

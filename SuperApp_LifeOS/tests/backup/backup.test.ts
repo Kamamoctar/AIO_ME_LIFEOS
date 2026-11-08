@@ -47,7 +47,7 @@ function financeState(): LifeOSState {
 }
 
 describe("LifeOS backup", () => {
-  it("round-trips a complete finance and modules backup", () => {
+  it("round-trips a complete finance and modules backup", async () => {
     const finance = financeState();
     const modules = createDefaultModulesState();
     modules.mk.projects.push({
@@ -59,28 +59,28 @@ describe("LifeOS backup", () => {
       createdAt: "2026-11-06T00:00:00.000Z",
     });
 
-    const backup = createLifeOSBackup(
+    const backup = await createLifeOSBackup(
       finance,
       modules,
       "2026-11-06T12:00:00.000Z"
     );
-    const restored = parseLifeOSBackup(JSON.stringify(backup));
+    const restored = await parseLifeOSBackup(JSON.stringify(backup));
 
     expect(restored.kind).toBe("full");
     expect(restored.finance).toEqual(finance);
     expect(restored.modules?.mk.projects[0]?.name).toBe("Projet test");
   });
 
-  it("keeps accepting legacy FinanceOS-only backups", () => {
+  it("keeps accepting legacy FinanceOS-only backups", async () => {
     const finance = financeState();
-    const restored = parseLifeOSBackup(JSON.stringify(finance));
+    const restored = await parseLifeOSBackup(JSON.stringify(finance));
 
     expect(restored.kind).toBe("legacy-finance");
     expect(restored.finance).toEqual(finance);
     expect(restored.modules).toBeNull();
   });
 
-  it("rejects a full backup before any partial restore can happen", () => {
+  it("rejects a full backup before any partial restore can happen", async () => {
     const corrupted = {
       format: "lifeos-full-backup",
       version: 1,
@@ -88,15 +88,18 @@ describe("LifeOS backup", () => {
       modules: { version: 1 },
     };
 
-    expect(() => parseLifeOSBackup(JSON.stringify(corrupted))).toThrow(
-      "incomplète ou endommagée"
-    );
+    await expect(parseLifeOSBackup(JSON.stringify(corrupted))).rejects.toThrow("incomplète ou endommagée");
   });
 
-  it("rejects malformed JSON and unknown data", () => {
-    expect(() => parseLifeOSBackup("{invalid")).toThrow("JSON valide");
-    expect(() => parseLifeOSBackup(JSON.stringify({ hello: "world" }))).toThrow(
-      "sauvegarde LifeOS reconnue"
-    );
+  it("rejects malformed JSON and unknown data", async () => {
+    await expect(parseLifeOSBackup("{invalid")).rejects.toThrow("JSON valide");
+    await expect(parseLifeOSBackup(JSON.stringify({ hello: "world" }))).rejects.toThrow("sauvegarde LifeOS reconnue");
+  });
+
+  it("rejects a modified v2 backup", async () => {
+    const backup = await createLifeOSBackup(financeState(), createDefaultModulesState());
+    backup.finance.accounts = [{ id: "tampered" }];
+
+    await expect(parseLifeOSBackup(JSON.stringify(backup))).rejects.toThrow("modifiée ou endommagée");
   });
 });

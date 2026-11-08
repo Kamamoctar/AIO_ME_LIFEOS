@@ -23,6 +23,9 @@ node_modules
 # misc
 .DS_Store
 *.pem
+*.jks
+*.keystore
+.signing/
 
 # debug
 npm-debug.log*

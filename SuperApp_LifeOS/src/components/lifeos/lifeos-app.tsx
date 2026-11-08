@@ -28,11 +28,16 @@ import { MonarchView } from "@/components/modules/monarch-view";
 import { SpiritualView } from "@/components/modules/spiritual-view";
 import { useUnifiedModules } from "@/lib/modules/store";
 import { DomainsHub, PlanningHub, ReviewHub } from "@/components/lifeos/life-hubs";
+import { DiagnosticsView } from "@/components/lifeos/diagnostics-view";
+import { LifeOSOnboarding } from "@/components/lifeos/onboarding";
+import { AppLockGate } from "@/components/lifeos/app-lock-gate";
 
 export function LifeOSApp() {
   const { state, view, error, setView, setQuickAddOpen } = useLifeOS();
   const { toast } = useToast();
   const hydrateModules = useUnifiedModules((store) => store.hydrate);
+  const modulesHydrated = useUnifiedModules((store) => store.hydrated);
+  const reminderSettings = useUnifiedModules((store) => store.data.spiritual.settings);
 
   useEffect(() => {
     hydrateModules();
@@ -100,6 +105,13 @@ export function LifeOSApp() {
     };
   }, [setView]);
 
+  useEffect(() => {
+    if (!modulesHydrated || !reminderSettings.notificationsEnabled) return;
+    void import("@/lib/native/reminders")
+      .then(({ refreshLifeOSRemindersIfNeeded }) => refreshLifeOSRemindersIfNeeded(reminderSettings))
+      .catch(() => undefined);
+  }, [modulesHydrated, reminderSettings]);
+
   // Messages d'erreur globaux
   useEffect(() => {
     if (error) {
@@ -131,12 +143,15 @@ export function LifeOSApp() {
     health: <HealthView />,
     skills: <SkillsView />,
     calendar: <CalendarView />,
+    diagnostics: <DiagnosticsView />,
     settings: <SettingsView />,
   };
 
   return (
     <AppShell>
       {state ? views[view] : null}
+      <LifeOSOnboarding />
+      <AppLockGate />
       <Toaster />
     </AppShell>
   );

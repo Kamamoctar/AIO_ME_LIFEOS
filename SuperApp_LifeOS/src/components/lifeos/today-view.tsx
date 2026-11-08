@@ -45,6 +45,7 @@ import {
 import { AlertTriangle } from "lucide-react";
 import type { LifeOSState } from "@/lib/lifeos/types";
 import { UnifiedTodayPanel } from "@/components/modules/unified-today-panel";
+import { DailyBriefing } from "@/components/lifeos/daily-briefing";
 
 export function TodayView() {
   const { state } = useLifeOS();
@@ -112,6 +113,7 @@ function TodayInner({ state }: { state: LifeOSState }) {
         </div>
       </div>
 
+      <DailyBriefing />
       <UnifiedTodayPanel />
 
       {/* Argent du mois */}

@@ -33,6 +33,7 @@ export const VIEW_IDS = [
   "health",
   "skills",
   "calendar",
+  "diagnostics",
   "settings",
 ] as const;
 

@@ -179,6 +179,7 @@ export function createInitialOfflineState(): LifeOSState {
         health: "EDIT",
         skills: "EDIT",
         calendar: "EDIT",
+        diagnostics: "EDIT",
         settings: "EDIT",
       },
       members: [
@@ -208,6 +209,7 @@ export function createInitialOfflineState(): LifeOSState {
             health: "EDIT",
             skills: "EDIT",
             calendar: "EDIT",
+            diagnostics: "EDIT",
             settings: "EDIT",
           },
           itemPermissions: [],
@@ -246,6 +248,12 @@ export function saveLocalState(state: LifeOSState): void {
   } catch (err) {
     console.error("[offline-storage] Erreur lors de la sauvegarde locale", err);
   }
+}
+
+export function resetOfflineLifeOSState(): LifeOSState {
+  const state = createInitialOfflineState();
+  saveLocalState(state);
+  return state;
 }
 
 function addAuditEvent(

@@ -73,6 +73,11 @@ export interface UnifiedModulesState {
     saturnCommitments: string[];
     weeklyReview: string;
     monthlyReview: string;
+    guidedReview: {
+      win: string;
+      friction: string;
+      nextFocus: string;
+    };
   };
   destiny: {
     birthDate: string;
@@ -157,6 +162,7 @@ export function createDefaultModulesState(): UnifiedModulesState {
       saturnCommitments: Array(5).fill(""),
       weeklyReview: "",
       monthlyReview: "",
+      guidedReview: { win: "", friction: "", nextFocus: "" },
     },
     destiny: { birthDate: "", customRules: [] },
     monarch: {
@@ -188,7 +194,11 @@ function mergeStoredState(value: Partial<UnifiedModulesState>): UnifiedModulesSt
     events: value.events ?? base.events,
     daily: value.daily ?? base.daily,
     evolution: { ...base.evolution, ...value.evolution },
-    mk: { ...base.mk, ...value.mk },
+    mk: {
+      ...base.mk,
+      ...value.mk,
+      guidedReview: { ...base.mk.guidedReview, ...value.mk?.guidedReview },
+    },
     destiny: { ...base.destiny, ...value.destiny },
     monarch: { ...base.monarch, ...value.monarch },
     spiritual: {
@@ -274,6 +284,7 @@ interface UnifiedModulesStore {
   updateMkProject: (id: string, patch: Partial<MkProject>) => void;
   setSaturnCommitment: (index: number, value: string) => void;
   setMkReview: (period: "weekly" | "monthly", value: string) => void;
+  setGuidedReview: (field: "win" | "friction" | "nextFocus", value: string) => void;
   setBirthDate: (birthDate: string) => void;
   addDestinyRule: (rule: string) => void;
   deleteDestinyRule: (index: number) => void;
@@ -539,6 +550,13 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
       mk: {
         ...data.mk,
         [period === "weekly" ? "weeklyReview" : "monthlyReview"]: value,
+      },
+    })),
+    setGuidedReview: (field, value) => commit((data) => ({
+      ...data,
+      mk: {
+        ...data.mk,
+        guidedReview: { ...data.mk.guidedReview, [field]: value },
       },
     })),
     setBirthDate: (birthDate) => commit((data) => ({ ...data, destiny: { ...data.destiny, birthDate } })),

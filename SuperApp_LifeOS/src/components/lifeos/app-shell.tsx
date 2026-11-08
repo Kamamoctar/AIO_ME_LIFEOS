@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThemeToggle } from "@/components/lifeos/theme-toggle";
 import { QuickAddButton, QuickAddSheet } from "@/components/lifeos/quick-add";
+import { GlobalSearch, LIFEOS_SEARCH_EVENT } from "@/components/lifeos/global-search";
+import { UniversalCaptureSheet } from "@/components/lifeos/universal-capture";
 import {
   Sun,
   Gauge,
@@ -35,6 +37,8 @@ import {
   CalendarClock,
   LayoutGrid,
   ClipboardCheck,
+  Stethoscope,
+  Search,
 } from "lucide-react";
 import {
   Sheet,
@@ -69,6 +73,7 @@ const NAV: { id: ViewId; label: string; icon: typeof Sun; group: "main" | "more"
   { id: "health", label: "Santé", icon: HeartPulse, group: "more" },
   { id: "skills", label: "Compétences", icon: GraduationCap, group: "more" },
   { id: "calendar", label: "Calendrier", icon: CalendarDays, group: "more" },
+  { id: "diagnostics", label: "Diagnostic", icon: Stethoscope, group: "more" },
   { id: "settings", label: "Paramètres", icon: Settings, group: "more" },
 ];
 
@@ -140,6 +145,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
 
           <div className="border-t px-4 py-3 flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Rechercher dans LifeOS"
+              onClick={() => window.dispatchEvent(new Event(LIFEOS_SEARCH_EVENT))}
+            >
+              <Search className="size-4" />
+            </Button>
             <AuthUserControl compact />
             <p className="text-[10px] text-muted-foreground">
               FCFA · {state?.settings.mode === "analyse" ? "Mode Analyse" : "Mode Simple"}
@@ -167,6 +180,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
               <div className="flex items-center gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Rechercher dans LifeOS"
+                  onClick={() => window.dispatchEvent(new Event(LIFEOS_SEARCH_EVENT))}
+                >
+                  <Search className="size-4" />
+                </Button>
                 {importantAlerts > 0 && (
                   <button
                     onClick={() => setView("cockpit")}
@@ -220,7 +241,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={item.id}
                 onClick={() => setView(item.id)}
                 className={cn(
-                  "flex flex-col items-center gap-0.5 py-2 text-[9px] font-medium transition-colors",
+                  "flex min-h-14 touch-manipulation flex-col items-center justify-center gap-0.5 py-2 text-[9px] font-medium transition-colors",
                   active ? "text-primary" : "text-muted-foreground"
                 )}
                 aria-current={active ? "page" : undefined}
@@ -239,6 +260,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Bouton flottant + saisie rapide */}
       <QuickAddButton />
       <QuickAddSheet />
+      <UniversalCaptureSheet />
+      <GlobalSearch />
     </div>
   );
 }
@@ -256,7 +279,7 @@ function MoreNav() {
       <SheetTrigger asChild>
         <button
           className={cn(
-            "flex flex-col items-center gap-0.5 py-2 text-[9px] font-medium transition-colors",
+            "flex min-h-14 touch-manipulation flex-col items-center justify-center gap-0.5 py-2 text-[9px] font-medium transition-colors",
             active ? "text-primary" : "text-muted-foreground"
           )}
           aria-label="Plus de sections"

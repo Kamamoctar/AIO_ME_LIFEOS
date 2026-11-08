@@ -3,10 +3,12 @@ import fs from "node:fs";
 import path from "node:path";
 
 const root = process.cwd();
+const releaseBuild = process.argv.includes("--release");
 const apiDir = path.join(root, "src/app/api");
 const apiTempDir = path.join(root, "src/app/_api_temp");
 const proxyFile = path.join(root, "src/proxy.ts");
 const proxyTempFile = path.join(root, "src/_proxy_temp.ts");
+const localSigningFile = path.join(root, ".signing", "lifeos-release.json");
 
 function javaExecutable(javaHome) {
   return path.join(javaHome, "bin", process.platform === "win32" ? "java.exe" : "java");
@@ -33,6 +35,7 @@ function resolveAndroidJavaHome() {
   if (process.platform === "win32") {
     const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
     candidates.push(path.join(programFiles, "Android", "Android Studio", "jbr"));
+    candidates.push(...childDirectories(path.join(process.env.TEMP ?? "", "lifeos-jdk21-portable")));
     candidates.push(...childDirectories(path.join(programFiles, "Eclipse Adoptium")));
     candidates.push(...childDirectories(path.join(programFiles, "Microsoft")));
     candidates.push(...childDirectories(path.join(programFiles, "Java")));
@@ -49,7 +52,22 @@ function resolveAndroidJavaHome() {
   return compatible[0];
 }
 
-console.log("=== Compilation LifeOS APK (100% hors-ligne) ===");
+if (releaseBuild) {
+  if (fs.existsSync(localSigningFile)) {
+    const local = JSON.parse(fs.readFileSync(localSigningFile, "utf8"));
+    process.env.LIFEOS_KEYSTORE_PATH ||= local.keystorePath;
+    process.env.LIFEOS_KEYSTORE_PASSWORD ||= local.keystorePassword;
+    process.env.LIFEOS_KEY_ALIAS ||= local.keyAlias;
+    process.env.LIFEOS_KEY_PASSWORD ||= local.keyPassword;
+  }
+  const required = ["LIFEOS_KEYSTORE_PATH", "LIFEOS_KEYSTORE_PASSWORD", "LIFEOS_KEY_ALIAS", "LIFEOS_KEY_PASSWORD"];
+  const missing = required.filter((name) => !process.env[name]);
+  if (missing.length) {
+    throw new Error(`Signature de production incomplète : ${missing.join(", ")}`);
+  }
+}
+
+console.log(`=== Compilation LifeOS APK ${releaseBuild ? "RELEASE" : "DEBUG"} (100% hors-ligne) ===`);
 
 let apiMoved = false;
 let proxyMoved = false;
@@ -88,7 +106,8 @@ console.log("2. Synchronisation Capacitor Android...");
 execSync("npx cap sync android", { cwd: root, stdio: "inherit" });
 
 console.log("3. Compilation Gradle APK...");
-const gradlewCmd = process.platform === "win32" ? ".\\gradlew.bat assembleDebug" : "./gradlew assembleDebug";
+const gradleTask = releaseBuild ? "assembleRelease" : "assembleDebug";
+const gradlewCmd = process.platform === "win32" ? `.\\gradlew.bat ${gradleTask}` : `./gradlew ${gradleTask}`;
 const java = resolveAndroidJavaHome();
 console.log(`   Java ${java.major} : ${java.home}`);
 execSync(gradlewCmd, {
@@ -97,8 +116,9 @@ execSync(gradlewCmd, {
   env: { ...process.env, JAVA_HOME: java.home },
 });
 
-const builtApk = path.join(root, "android/app/build/outputs/apk/debug/app-debug.apk");
-const destApk = path.join(root, "LifeOS.apk");
+const variant = releaseBuild ? "release" : "debug";
+const builtApk = path.join(root, `android/app/build/outputs/apk/${variant}/app-${variant}.apk`);
+const destApk = path.join(root, releaseBuild ? "LifeOS-release.apk" : "LifeOS.apk");
 
 if (fs.existsSync(builtApk)) {
   fs.copyFileSync(builtApk, destApk);

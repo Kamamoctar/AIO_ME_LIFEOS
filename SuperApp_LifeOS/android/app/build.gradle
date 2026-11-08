@@ -1,5 +1,11 @@
 apply plugin: 'com.android.application'
 
+def lifeosKeystorePath = System.getenv('LIFEOS_KEYSTORE_PATH')
+def lifeosKeystorePassword = System.getenv('LIFEOS_KEYSTORE_PASSWORD')
+def lifeosKeyAlias = System.getenv('LIFEOS_KEY_ALIAS')
+def lifeosKeyPassword = System.getenv('LIFEOS_KEY_PASSWORD')
+def lifeosReleaseSigningReady = [lifeosKeystorePath, lifeosKeystorePassword, lifeosKeyAlias, lifeosKeyPassword].every { it }
+
 android {
     namespace = "com.moclife.lifeos"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,8 +13,8 @@ android {
         applicationId "com.moclife.lifeos"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 10001
-        versionName "1.0.1"
+        versionCode 10200
+        versionName "1.2.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +22,31 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    signingConfigs {
+        if (lifeosReleaseSigningReady) {
+            release {
+                storeFile file(lifeosKeystorePath)
+                storePassword lifeosKeystorePassword
+                keyAlias lifeosKeyAlias
+                keyPassword lifeosKeyPassword
+            }
+        }
+    }
     buildTypes {
         release {
+            if (lifeosReleaseSigningReady) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
+    }
+}
+
+gradle.taskGraph.whenReady { graph ->
+    def buildingRelease = graph.allTasks.any { it.path == ':app:assembleRelease' || it.path == ':app:bundleRelease' }
+    if (buildingRelease && !lifeosReleaseSigningReady) {
+        throw new GradleException('Signature LifeOS absente. Définis LIFEOS_KEYSTORE_PATH, LIFEOS_KEYSTORE_PASSWORD, LIFEOS_KEY_ALIAS et LIFEOS_KEY_PASSWORD.')
     }
 }
 

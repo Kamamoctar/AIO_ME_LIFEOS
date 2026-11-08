@@ -20,10 +20,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import { useLifeOS } from "@/lib/lifeos/store";
 import type { ViewId } from "@/lib/lifeos/constants";
 import { getTodayEntry, useUnifiedModules } from "@/lib/modules/store";
 import { initialDailyQuests } from "@/data/monarch-seed";
+import { buildWeeklyLifeReview } from "@/lib/lifeos/intelligence";
+
+const REVIEW_FIELDS = ["win", "friction", "nextFocus"] as const;
 
 interface HubLink {
   view: ViewId;
@@ -106,6 +110,8 @@ export function ReviewHub() {
   const rituals = [...today.morningRituals, ...today.eveningRituals].filter(Boolean).length;
   const dailyScore = Math.round(((today.questDone.length / initialDailyQuests.length) * 0.45 + (today.prayersDone.length / 5) * 0.35 + (rituals / 8) * 0.2) * 100);
   const recentEvents = modules.events.slice(0, 8);
+  const setGuidedReview = useUnifiedModules((store) => store.setGuidedReview);
+  const weekly = buildWeeklyLifeReview(modules, state ? new Date(state.today) : new Date());
 
   return (
     <div className="space-y-5">
@@ -115,6 +121,25 @@ export function ReviewHub() {
         <Card><CardContent className="pt-5"><CheckCircle2 className="size-5 text-emerald-500" /><p className="mt-2 text-2xl font-black">{modules.monarch.xpTotal}</p><p className="text-xs text-muted-foreground">XP unifiés</p></CardContent></Card>
         <Card><CardContent className="pt-5"><FolderKanban className="size-5 text-amber-500" /><p className="mt-2 text-2xl font-black">{state?.actions.filter((action) => !action.done).length ?? 0}</p><p className="text-xs text-muted-foreground">actions ouvertes</p></CardContent></Card>
       </div>
+      <Card>
+        <CardHeader><CardTitle className="text-base">Revue guidée · 7 jours</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <ReviewMetric label="Quêtes" value={`${weekly.questRate}%`} />
+            <ReviewMetric label="Prières" value={`${weekly.prayerRate}%`} />
+            <ReviewMetric label="Rituels" value={`${weekly.ritualRate}%`} />
+            <ReviewMetric label="Évolution" value={String(weekly.evolutionDone)} />
+            <ReviewMetric label="XP gagnés" value={String(weekly.xpEarned)} />
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {REVIEW_FIELDS.map((field, index) => (
+              <label key={field} className="text-xs font-medium">{weekly.prompts[index]}
+                <Textarea className="mt-2" rows={4} value={modules.mk.guidedReview[field]} onChange={(event) => setGuidedReview(field, event.target.value)} placeholder="Écris une réponse concrète…" />
+              </label>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader><CardTitle className="text-base">Journal d’activité unifié</CardTitle></CardHeader>
         <CardContent className="space-y-2">
@@ -130,4 +155,8 @@ export function ReviewHub() {
       ]} />
     </div>
   );
+}
+
+function ReviewMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-lg border bg-muted/30 p-3"><p className="text-lg font-black text-primary">{value}</p><p className="text-[10px] text-muted-foreground">{label}</p></div>;
 }

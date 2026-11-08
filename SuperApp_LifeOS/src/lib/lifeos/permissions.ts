@@ -16,6 +16,7 @@ export const FEATURE_DEFINITIONS = [
   { id: "health", label: "Sante" },
   { id: "skills", label: "Competences" },
   { id: "calendar", label: "Calendrier" },
+  { id: "diagnostics", label: "Diagnostic" },
   { id: "settings", label: "Parametres personnels" },
 ] as const;
 
