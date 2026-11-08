@@ -6,7 +6,9 @@ import type {
   AppSettings,
   CureDay,
   MainPrayerName,
+  Zikr,
 } from "@/modules/spiritual/types";
+import { createPersonalZikr, type PersonalZikrInput } from "@/modules/spiritual/custom-zikr";
 import { readKernelSection, writeKernelSection } from "@/lib/lifeos/kernel-storage";
 import {
   appendLifeEvent,
@@ -106,6 +108,7 @@ export interface UnifiedModulesState {
   };
   spiritual: {
     settings: AppSettings;
+    customZikrs: Zikr[];
     lifetimeCounts: Record<string, number>;
     dailyCounts: Record<string, Record<string, number>>;
     intentions: SpiritualIntention[];
@@ -195,6 +198,7 @@ export function createDefaultModulesState(): UnifiedModulesState {
     },
     spiritual: {
       settings: DEFAULT_SPIRITUAL_SETTINGS,
+      customZikrs: [],
       lifetimeCounts: {},
       dailyCounts: {},
       intentions: [],
@@ -331,6 +335,8 @@ interface UnifiedModulesStore {
   declareRelapse: () => void;
   incrementZikr: (zikrId: string, amount?: number) => void;
   resetTodayZikr: (zikrId: string) => void;
+  addCustomZikr: (input: PersonalZikrInput) => void;
+  deleteCustomZikr: (zikrId: string) => void;
   togglePrayer: (prayer: MainPrayerName) => void;
   addIntention: (zikrId: string, text: string) => void;
   updateSpiritualSettings: (patch: Partial<AppSettings>) => void;
@@ -732,6 +738,35 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
             [zikrId]: Math.max(0, (data.spiritual.lifetimeCounts[zikrId] ?? 0) - removed),
           },
           dailyCounts: { ...data.spiritual.dailyCounts, [key]: { ...current, [zikrId]: 0 } },
+        },
+      };
+    }),
+    addCustomZikr: (input) => commit((data) => ({
+      ...data,
+      spiritual: {
+        ...data.spiritual,
+        customZikrs: [createPersonalZikr(input), ...data.spiritual.customZikrs],
+      },
+    })),
+    deleteCustomZikr: (zikrId) => commit((data) => {
+      const lifetimeCounts = { ...data.spiritual.lifetimeCounts };
+      delete lifetimeCounts[zikrId];
+      const dailyCounts = Object.fromEntries(Object.entries(data.spiritual.dailyCounts).map(
+        ([date, counts]) => {
+          const nextCounts = { ...counts };
+          delete nextCounts[zikrId];
+          return [date, nextCounts];
+        }
+      ));
+      return {
+        ...data,
+        spiritual: {
+          ...data.spiritual,
+          customZikrs: data.spiritual.customZikrs.filter((zikr) => zikr.id !== zikrId),
+          lifetimeCounts,
+          dailyCounts,
+          intentions: data.spiritual.intentions.filter((intention) => intention.zikrId !== zikrId),
+          cureDays: data.spiritual.cureDays.filter((day) => day.zikrId !== zikrId),
         },
       };
     }),

@@ -5,6 +5,7 @@ import type { LocalNotificationSchema } from "@capacitor/local-notifications";
 
 const CHANNEL_ID = "lifeos-reminders";
 const DAILY_ID = 19_001;
+const TEST_ID = 18_999;
 const PRAYER_ID_START = 20_000;
 const PRAYER_ID_END = 20_999;
 const REMINDER_META_KEY = "lifeos_reminder_schedule_v1";
@@ -138,6 +139,40 @@ export async function disableLifeOSReminders(): Promise<ReminderResult> {
   if (ours.length) await notifications.cancel({ notifications: ours });
   writeReminderMeta(null);
   return { ok: true, count: 0, message: "Rappels LifeOS désactivés." };
+}
+
+export async function testLifeOSNotification(): Promise<ReminderResult> {
+  const notifications = await nativeNotifications();
+  if (!notifications) {
+    return { ok: false, count: 0, message: "Le test est disponible dans l’application Android." };
+  }
+  const permission = await notifications.checkPermissions();
+  const granted = permission.display === "granted"
+    ? permission
+    : await notifications.requestPermissions();
+  if (granted.display !== "granted") {
+    return { ok: false, count: 0, message: "Android bloque les notifications pour LifeOS." };
+  }
+
+  await notifications.createChannel({
+    id: CHANNEL_ID,
+    name: "Rappels LifeOS",
+    description: "Briefing quotidien et horaires de prière",
+    importance: 4,
+    vibration: true,
+  });
+  await notifications.cancel({ notifications: [{ id: TEST_ID }] });
+  const result = await notifications.schedule({ notifications: [{
+    id: TEST_ID,
+    title: "Test LifeOS réussi",
+    body: "Les notifications locales fonctionnent sur cet appareil.",
+    channelId: CHANNEL_ID,
+    foreground: true,
+  }] });
+  const displayed = result.notifications.some((item) => item.id === TEST_ID);
+  return displayed
+    ? { ok: true, count: 1, message: "Notification de test envoyée. Vérifie la bannière Android." }
+    : { ok: false, count: 0, message: "Android n’a pas accepté la notification de test." };
 }
 
 export async function scheduleLifeOSReminders(

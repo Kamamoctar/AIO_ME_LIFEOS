@@ -19,6 +19,7 @@ import {
 export function SecuritySettingsCard() {
   const [settings, setSettings] = useState<AppLockSettings>(getAppLockSettings);
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [testing, setTesting] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -44,6 +45,22 @@ export function SecuritySettingsCard() {
     }
   };
 
+  const testBiometrics = async () => {
+    setTesting(true);
+    try {
+      await verifyLifeOSIdentity();
+      toast({ title: "Biométrie vérifiée", description: "Le déverrouillage fonctionne sur cet appareil." });
+    } catch (error) {
+      toast({
+        title: "Test biométrique échoué",
+        description: error instanceof Error ? error.message : "Vérification annulée.",
+        variant: "destructive",
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   return (
     <SectionCard title="Sécurité locale" description="Verrouillage de confort par la biométrie Android" icon={<Fingerprint className="size-4" />}>
       <div className="space-y-4">
@@ -51,6 +68,9 @@ export function SecuritySettingsCard() {
           <div><p className="text-sm font-medium">Verrou biométrique</p><p className="text-[11px] text-muted-foreground">{available === false ? "Non disponible sur cet appareil ou dans le navigateur" : "Empreinte ou biométrie configurée sur le téléphone"}</p></div>
           <Switch checked={settings.enabled} disabled={available !== true && !settings.enabled} onCheckedChange={toggle} />
         </div>
+        <Button variant="outline" size="sm" disabled={available !== true || testing} onClick={() => void testBiometrics()}>
+          <Fingerprint className="mr-1.5 size-4" /> {testing ? "Vérification…" : "Tester l’empreinte"}
+        </Button>
         {settings.enabled && (
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div><p className="text-sm font-medium">Verrouiller après</p><p className="text-[11px] text-muted-foreground">Une mise en arrière-plan de l’application</p></div>

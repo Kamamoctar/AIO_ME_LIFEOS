@@ -127,7 +127,7 @@ export async function runLifeOSDiagnostics(now = new Date()): Promise<LifeOSDiag
   });
 
   return {
-    appVersion: "1.3.0",
+    appVersion: "1.4.0",
     generatedAt: now.toISOString(),
     platform,
     items,

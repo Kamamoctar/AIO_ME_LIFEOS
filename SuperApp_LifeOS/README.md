@@ -16,8 +16,8 @@ personnelle, gamification et spiritualité.
   jours selon une intention.
 - **Royaume** : quêtes, XP, statistiques, rangs, donjons, entraînements et
   protocole SOS.
-- **Misbaha** : calcul local des prières, programme de zikr, tasbih persistant,
-  intentions et progression.
+- **Misbaha** : calcul local des prières, programme de zikr, zikrs personnels,
+  tasbih persistant avec retour haptique natif, intentions et progression.
 - **FinanceOS Foyer** : comptes, budgets, transactions, objectifs, patrimoine,
   investissements, décisions et simulations.
 
@@ -31,7 +31,8 @@ en cibles FCFA personnalisables, compare le réel aux objectifs et classe les
 transactions existantes sans dupliquer le budget ni les enveloppes.
 
 Les données de l'APK sont conservées sur l'appareil. La version Android propose
-un verrou biométrique de confort, un transfert inter-appareils manuel chiffré
+un verrou biométrique de confort testable depuis l'application, des rappels
+Android vérifiables immédiatement, un transfert inter-appareils manuel chiffré
 par AES-256-GCM et un effacement local avec double confirmation. La phrase
 secrète de transfert n'est jamais enregistrée.
 
