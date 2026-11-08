@@ -25,6 +25,11 @@ Les modules partagent la navigation, un briefing quotidien local, la recherche,
 la capture universelle, un calendrier transversal, une revue hebdomadaire et
 une sauvegarde globale. Le tableau du jour est personnalisable.
 
+Le module Finances comprend une allocation optionnelle en six poches. Le modèle
+50/10/10/10/10/10 transforme automatiquement le revenu net attendu ou encaissé
+en cibles FCFA personnalisables, compare le réel aux objectifs et classe les
+transactions existantes sans dupliquer le budget ni les enveloppes.
+
 Les données de l'APK sont conservées sur l'appareil. La version Android propose
 un verrou biométrique de confort, un transfert inter-appareils manuel chiffré
 par AES-256-GCM et un effacement local avec double confirmation. La phrase

@@ -7,6 +7,7 @@ import {
   localDateKey,
   type UnifiedModulesState,
 } from "@/lib/modules/store";
+import { computeMoneyAllocation } from "@/lib/lifeos/money-plan";
 
 export interface LifeOSRecommendation {
   id: string;
@@ -81,6 +82,15 @@ export function buildDailyRecommendations(
   });
   if (!monthlyTransactions.length) {
     recommendations.push({ id: "finance-log", score: 55, title: "Mets tes finances à jour", reason: "Aucune opération n’est enregistrée pour le mois courant.", view: "finances", category: "finance" });
+  }
+
+  if (modules.finance.moneyPlan.enabled) {
+    const allocation = computeMoneyAllocation(state, modules.finance.moneyPlan, now);
+    if (allocation.totalPercentage !== 100) {
+      recommendations.push({ id: "money-plan-total", score: 90, title: "Corrige la répartition des six poches", reason: `Les cibles totalisent ${allocation.totalPercentage}% au lieu de 100%.`, view: "finances", category: "finance" });
+    } else if (allocation.unclassified > 0) {
+      recommendations.push({ id: "money-plan-unclassified", score: 70, title: "Classe tes dépenses dans les six poches", reason: `${allocation.unclassified.toLocaleString("fr-FR")} FCFA restent non classés ce mois.`, view: "finances", category: "finance" });
+    }
   }
 
   return recommendations.toSorted((a, b) => b.score - a.score).slice(0, 6);

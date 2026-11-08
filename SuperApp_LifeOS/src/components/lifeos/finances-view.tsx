@@ -54,6 +54,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { SixPocketsPlan } from "@/components/lifeos/six-pockets-plan";
 
 export function FinancesView() {
   return (
@@ -64,17 +65,21 @@ export function FinancesView() {
           Finances
         </h1>
         <p className="text-xs text-muted-foreground mt-0.5">
-          Budget prévisionnel vs réel · enveloppes · charges récurrentes · clôture mensuelle
+          Budget prévisionnel vs réel · six poches · enveloppes · charges · clôture
         </p>
       </div>
-      <TabsList className="grid grid-cols-4 h-9">
-        <TabsTrigger value="budget" className="text-xs">Budget</TabsTrigger>
-        <TabsTrigger value="envelopes" className="text-xs">Enveloppes</TabsTrigger>
-        <TabsTrigger value="charges" className="text-xs">Charges</TabsTrigger>
-        <TabsTrigger value="cloture" className="text-xs">Clôture</TabsTrigger>
+      <TabsList className="grid h-9 grid-cols-5">
+        <TabsTrigger value="budget" className="text-[10px] sm:text-xs">Budget</TabsTrigger>
+        <TabsTrigger value="allocation" className="text-[10px] sm:text-xs">6 poches</TabsTrigger>
+        <TabsTrigger value="envelopes" className="text-[10px] sm:text-xs">Enveloppes</TabsTrigger>
+        <TabsTrigger value="charges" className="text-[10px] sm:text-xs">Charges</TabsTrigger>
+        <TabsTrigger value="cloture" className="text-[10px] sm:text-xs">Clôture</TabsTrigger>
       </TabsList>
       <TabsContent value="budget" className="space-y-4">
         <BudgetTab />
+      </TabsContent>
+      <TabsContent value="allocation" className="space-y-4">
+        <SixPocketsPlan />
       </TabsContent>
       <TabsContent value="envelopes" className="space-y-4">
         <EnvelopesTab />

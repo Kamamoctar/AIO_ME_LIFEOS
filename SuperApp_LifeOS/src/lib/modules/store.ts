@@ -15,6 +15,13 @@ import {
   type EvolutionSchedule,
   type LifeEvent,
 } from "@/lib/modules/domain-core";
+import {
+  DEFAULT_MONEY_ALLOCATION_CONFIG,
+  type MoneyPlanIncomeBasis,
+  type MoneyPocketId,
+  type MoneyPocketPercentages,
+  type MoneyAllocationConfig,
+} from "@/lib/lifeos/money-plan";
 
 export interface ModuleDailyEntry {
   date: string;
@@ -61,6 +68,9 @@ export interface UnifiedModulesState {
   version: 1;
   events: LifeEvent[];
   daily: Record<string, ModuleDailyEntry>;
+  finance: {
+    moneyPlan: MoneyAllocationConfig;
+  };
   evolution: {
     activeActionCodes: string[];
     xp: number;
@@ -155,6 +165,13 @@ export function createDefaultModulesState(): UnifiedModulesState {
     version: 1,
     events: [],
     daily: {},
+    finance: {
+      moneyPlan: {
+        ...DEFAULT_MONEY_ALLOCATION_CONFIG,
+        percentages: { ...DEFAULT_MONEY_ALLOCATION_CONFIG.percentages },
+        categoryAssignments: {},
+      },
+    },
     evolution: { activeActionCodes: [], xp: 0, xpByDomain: {}, schedules: {} },
     mk: {
       ideas: [],
@@ -193,6 +210,22 @@ function mergeStoredState(value: Partial<UnifiedModulesState>): UnifiedModulesSt
     ...value,
     events: value.events ?? base.events,
     daily: value.daily ?? base.daily,
+    finance: {
+      ...base.finance,
+      ...value.finance,
+      moneyPlan: {
+        ...base.finance.moneyPlan,
+        ...value.finance?.moneyPlan,
+        percentages: {
+          ...base.finance.moneyPlan.percentages,
+          ...value.finance?.moneyPlan?.percentages,
+        },
+        categoryAssignments: {
+          ...base.finance.moneyPlan.categoryAssignments,
+          ...value.finance?.moneyPlan?.categoryAssignments,
+        },
+      },
+    },
     evolution: { ...base.evolution, ...value.evolution },
     mk: {
       ...base.mk,
@@ -270,6 +303,11 @@ interface UnifiedModulesStore {
   hydrate: () => void;
   replaceData: (data: UnifiedModulesState) => void;
   resetData: () => void;
+  setMoneyPlanEnabled: (enabled: boolean) => void;
+  setMoneyPlanIncomeBasis: (incomeBasis: MoneyPlanIncomeBasis) => void;
+  setMoneyPlanPercentages: (percentages: MoneyPocketPercentages) => void;
+  setMoneyPocketPercentage: (pocket: MoneyPocketId, percentage: number) => void;
+  assignCategoryToMoneyPocket: (categoryId: string, pocket: MoneyPocketId | null) => void;
   setPriority: (priority: string) => void;
   setEnergy: (energy: number) => void;
   toggleBlock: (index: number) => void;
@@ -339,6 +377,48 @@ export const useUnifiedModules = create<UnifiedModulesStore>((set, get) => {
       persist(data);
       set({ data, hydrated: true });
     },
+    setMoneyPlanEnabled: (enabled) => commit((data) => ({
+      ...data,
+      finance: { ...data.finance, moneyPlan: { ...data.finance.moneyPlan, enabled } },
+    })),
+    setMoneyPlanIncomeBasis: (incomeBasis) => commit((data) => ({
+      ...data,
+      finance: { ...data.finance, moneyPlan: { ...data.finance.moneyPlan, incomeBasis } },
+    })),
+    setMoneyPlanPercentages: (percentages) => commit((data) => ({
+      ...data,
+      finance: {
+        ...data.finance,
+        moneyPlan: { ...data.finance.moneyPlan, percentages: { ...percentages } },
+      },
+    })),
+    setMoneyPocketPercentage: (pocket, percentage) => commit((data) => ({
+      ...data,
+      finance: {
+        ...data.finance,
+        moneyPlan: {
+          ...data.finance.moneyPlan,
+          percentages: {
+            ...data.finance.moneyPlan.percentages,
+            [pocket]: Number.isFinite(percentage)
+              ? Math.max(0, Math.min(100, percentage))
+              : 0,
+          },
+        },
+      },
+    })),
+    assignCategoryToMoneyPocket: (categoryId, pocket) => commit((data) => {
+      const categoryAssignments = { ...data.finance.moneyPlan.categoryAssignments };
+      if (pocket) categoryAssignments[categoryId] = pocket;
+      else delete categoryAssignments[categoryId];
+      return {
+        ...data,
+        finance: {
+          ...data.finance,
+          moneyPlan: { ...data.finance.moneyPlan, categoryAssignments },
+        },
+      };
+    }),
     setPriority: (priority) => commit((data) => updateToday(data, (entry) => ({ ...entry, priority }))),
     setEnergy: (energy) =>
       commit((data) => updateToday(data, (entry) => ({ ...entry, energy: Math.max(1, Math.min(10, energy)) }))),
